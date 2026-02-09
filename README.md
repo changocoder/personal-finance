@@ -1,145 +1,183 @@
-# Personal Finance PDF Extractor
+# Personal Finance App
 
-Pequeña herramienta para extraer consumos (transacciones) desde resúmenes/estados de tarjetas en PDF y consolidarlos en un CSV.
+Una aplicación para extraer y procesar consumos de tarjetas de crédito desde archivos PDF de resúmenes bancarios.
 
-Estado: trabajo en progreso
+## 📋 Descripción
 
----
+Esta aplicación automatiza la extracción de consumos de tarjetas de crédito a partir de archivos PDF de resúmenes. Soporta múltiples tipos de tarjetas (VISA, Mastercard) y detecta automáticamente información como:
 
-Contenido
-- Descripción
-- Requisitos
-- Instalación
-- Uso
-- Estructura del proyecto
-- Formato esperado de los PDFs
-- Solución de problemas (incluye PdfminerException)
-- .gitignore recomendado
+- Fecha del consumo
+- Descripción del comercio
+- Monto en ARS o USD
+- Tipo de tarjeta
+- Número de tarjeta
+- Banco emisor
 
----
+Además, identifica y marca duplicados automáticamente.
 
-Descripción
------------
-Este proyecto abre archivos PDF (resúmenes de tarjetas) ubicados en la carpeta `data_cards/`, extrae el texto de cada página y busca patrones para identificar consumos (fecha, descripción, monto). Los consumos detectados se normalizan, se eliminan duplicados y se guardan en `consumos_totales.csv`.
+## 🚀 Características
 
-Requisitos
-----------
+- ✅ Extracción de texto desde PDFs (con o sin contraseña)
+- ✅ Detección automática del tipo de tarjeta y banco
+- ✅ Procesamiento de montos en ARS y USD
+- ✅ Eliminación de duplicados
+- ✅ Exportación a CSV
+- ✅ Manejo robusto de errores
+
+## 📁 Estructura del Proyecto
+
+```
+personal-finance-app/
+├── main.py                    # Script principal de procesamiento
+├── extract_text.py            # Módulo de extracción de texto desde PDFs
+├── requirements.txt           # Dependencias del proyecto
+├── consumos_totales.csv       # Archivo de salida con consumos procesados
+├── data_cards/                # Carpeta con archivos PDF de resúmenes (ignorada en git)
+│   └── .gitkeep
+├── .gitignore                 # Configuración de git
+└── README.md                  # Este archivo
+```
+
+## 📦 Requisitos
+
 - Python 3.8+
-- Dependencias listadas en `requirements.txt` (pdfplumber, pandas, etc.)
+- pip (gestor de paquetes de Python)
 
-Instalación
------------
-Recomendado crear un entorno virtual e instalar dependencias:
+## 🔧 Instalación
+
+1. Clona o descarga este repositorio
+2. Instala las dependencias:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Uso
----
-1. Coloca tus PDFs en la carpeta `data_cards/` del proyecto.
-2. (Opcional) Si tus PDFs están protegidos con contraseña y conoces la contraseña, puedes configurar la variable `password_pdf` en `main.py` o exportar una variable de entorno con el nombre configurado (por ejemplo `PDF_PASSWORD`) y modificar el código para leerla.
-3. Ejecuta el script principal:
+3. Coloca tus archivos PDF en la carpeta `data_cards/`
+
+## 🎯 Uso
+
+Ejecuta el script principal:
 
 ```bash
 python main.py
 ```
 
-Resultados
-- `consumos_totales.csv`: CSV con los consumos únicos detectados.
-- `consumos_totales.txt`: (si se usa) salida de texto con consumos.
-- `data_cards/tmp_debug/`: durante la ejecución se crean archivos `texto_extraido_<nombre_pdf>.txt` para cada PDF procesado (su contenido ayuda a depurar patrones de extracción). El directorio temporal se elimina al final si hay resultados.
+El script:
+1. Buscará todos los archivos PDF en la carpeta `data_cards/`
+2. Extraerá el texto de cada PDF
+3. Parseará los consumos detectados
+4. Guardará los resultados en `consumos_totales.csv`
+5. Generará un archivo de log `procesamiento_consumos.log` con todos los detalles
 
-Estructura del proyecto
-----------------------
-- `main.py` - script principal que busca PDFs, abre cada uno (intenta sin contraseña y con contraseña configurada), extrae texto, procesa patrones y genera el CSV.
-- `data_cards/` - carpeta donde colocar los PDF (ignorada en `.gitignore` recomendada).
-- `consumos_totales.csv` - salida generada.
-- `requirements.txt` - dependencias del proyecto.
+### Verificar Resultados
 
-Formato esperado de PDFs / patrones
-----------------------------------
-El procesador busca líneas que contengan una fecha y un monto con formato local (ej.: `01.07.25 DESCRIPCION 1.234,56`) y también variantes en USD.
-Si tus PDFs tienen formato distinto (columnas separadas, tablas embebidas, o texto con saltos de línea intermedios), puede que los patrones no coincidan y no se detecten consumos.
+Después de ejecutar, puedes ver:
 
-Solución de problemas
----------------------
-- PdfminerException (o `Pdfplumber` levantando excepciones):
-  - Sucede cuando `pdfplumber` no puede leer el PDF (archivo corrupto, cifrado con contraseña desconocida, o formato no soportado).
-  - Recomendaciones:
-    1. Revisa los archivos de depuración `data_cards/tmp_debug/texto_extraido_<pdf>.txt` (si existen) para ver qué texto fue extraído antes de fallar.
-    2. Si el PDF está cifrado, asegúrate de conocer la contraseña. Puedes:
-       - Configurar `password_pdf` en `main.py` (por ahora está establecido en el script) o modificar el código para leer la variable de entorno `PDF_PASSWORD`.
-       - Usar herramientas externas (ej. `qpdf --decrypt`) para generar una versión sin contraseña.
-    3. Si la extracción produce texto vacío o malformado, prueba con otro extractor (ej. `pdftotext`) para comparar.
-    4. En logs puedes añadir prints o usar `logging` para capturar excepciones completas (stacktrace) y el nombre del archivo que causa el error.
+- **Consumos extraídos**: en `consumos_totales.csv`
+- **Detalles del procesamiento**: en `procesamiento_consumos.log`
+- **Montos convertidos**: en `procesamiento_consumos.log` (ver GUIA_LOGGING.md)
 
-- No se encuentran consumos:
-  - Los patrones regex del script esperan fechas y montos en formatos concretos. Abre el `texto_extraido_<pdf>.txt` y verifica cómo están las líneas para ajustar `procesar_texto_resumen()` en `main.py`.
+### Contraseña de PDFs
 
-.gitignore recomendado
-----------------------
-El repositorio incluye ahora un archivo `.gitignore` en la raíz con las reglas recomendadas para este proyecto. El archivo ya fue creado y excluye, entre otras cosas, los PDFs personales en `data_cards/`.
+Si tus PDFs están protegidos con contraseña, edita la variable `password_pdf` en `main.py`:
 
-Contenido del `.gitignore` creado:
-
-```text
-# Ignore all files in data_cards (keep the folder if you want)
-data_cards/*
-!data_cards/.gitkeep
-
-# Output files
-consumos_totales.csv
-consumos_totales.txt
-
-# Python cache and compiled files
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-
-# Build/dist
-build/
-dist/
-*.egg-info/
-
-# IDE/editor
-.vscode/
-.idea/
-*.swp
-
-# Logs and temp
-*.log
-*.tmp
-
-# pytest
-.pytest_cache/
-
-# Jupyter
-.ipynb_checkpoints
-
-# macOS
-.DS_Store
+```python
+password_pdf = 'tu_contraseña_aqui'
 ```
 
-Nota: si prefieres no versionar la carpeta `data_cards/` pero mantenerla en el repositorio, añade manualmente un archivo vacío `data_cards/.gitkeep`.
+### 📊 Logging y Depuración
 
-Buenas prácticas y próximos pasos
---------------------------------
-- Extraer la lógica de procesamiento de texto a un módulo separado para facilitar pruebas unitarias.
-- Añadir tests (pytest) con ejemplos de texto extraído y casos borde (montos negativos, IVA, devoluciones).
-- Hacer la contraseña configurable por variable de entorno y documentarla en este README.
-- Añadir logging nivel DEBUG para diagnosticar `PdfminerException` cuando ocurran.
+El script genera un archivo de log automáticamente (`procesamiento_consumos.log`) que contiene:
 
-Contacto
---------
-Si necesitas que adapte los regex para tus PDFs concretos, comparte un ejemplo (el contenido del `texto_extraido_*.txt`) y te ayudo a ajustar `procesar_texto_resumen()`.
+- ✅ Cada consumo extraído con fecha, descripción y monto
+- ✅ Conversión de montos paso a paso (para verificar)
+- ✅ Avisos sobre consumos excluidos o inválidos
+- ✅ Detalles sobre duplicados detectados
+- ✅ Resumen del procesamiento
+
+Para aprender cómo usar los logs, consulta `GUIA_LOGGING.md`
+
+Ejemplo rápido:
+```bash
+# Ver consumos extraídos
+grep "Consumo \[" procesamiento_consumos.log
+
+# Buscar un consumo específico
+grep "APPLE" procesamiento_consumos.log
+
+# Ver montos inválidos
+grep "inválido" procesamiento_consumos.log
+```
+
+## 📊 Formato de Salida
+
+El archivo `consumos_totales.csv` contiene las siguientes columnas:
+
+| Campo | Descripción |
+|-------|-------------|
+| fecha | Fecha del consumo (dd.mm.yy) |
+| descripcion | Descripción del comercio |
+| monto | Monto del consumo |
+| moneda | Moneda (ARS o USD) |
+| tarjeta | Tipo de tarjeta (VISA, Mastercard, etc.) |
+| numero_tarjeta | Número de tarjeta (últimos dígitos) |
+| banco | Código del banco emisor |
+| duplicado | Indica si es un duplicado (SI/NO/ERROR_DUPLICADO_ARCHIVO) |
+
+## ⚙️ Configuración
+
+En `main.py` puedes personalizar:
+
+- **CARPETA_RESUMENES**: Carpeta donde buscar PDFs (default: `data_cards/`)
+- **ARCHIVO_SALIDA**: Nombre del archivo de salida (default: `consumos_totales.txt`)
+- **PALABRAS_A_EXCLUIR**: Palabras clave para filtrar líneas que no son consumos
+
+```python
+PALABRAS_A_EXCLUIR = [
+    'SALDO ANTERIOR', 'SU PAGO', 'IMPUESTO', 'IVA', 'DB.RG',
+    'SALDO ACTUAL', 'PAGO MINIMO', 'Total Consumos',
+    'DEV.IMP.'
+]
+```
+
+## 🐛 Detección de Duplicados
+
+El script detecta duplicados de dos formas:
+
+1. **Duplicados exactos**: Mismo consumo en el mismo archivo
+2. **Duplicados por similitud**: Mismo monto, tarjeta y descripción similar en archivos diferentes (dentro de ±5 días)
+
+## 📝 Notas Importantes
+
+- Los archivos PDF en `data_cards/` son ignorados por git (.gitignore)
+- Se recomienda mantener una copia de seguridad de tus archivos PDF
+- El script genera archivos temporales en `data_cards/tmp_debug/` que se eliminan automáticamente al finalizar
+- Los montos se procesan como valores positivos (se ignora el signo en el PDF)
+
+## 🔐 Privacidad y Seguridad
+
+- Los datos de tus tarjetas se procesan localmente
+- No se envía información a servidores externos
+- Se recomienda no compartir el archivo `consumos_totales.csv` ni los PDFs
+
+## 🤝 Contribuciones
+
+Las contribuciones son bienvenidas. Por favor:
+
+1. Realiza un fork del proyecto
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detalles.
+
+## 📞 Contacto y Soporte
+
+Si encuentras problemas o tienes sugerencias, por favor abre un issue en el repositorio.
+
+---
+
+**Última actualización**: Diciembre 2025

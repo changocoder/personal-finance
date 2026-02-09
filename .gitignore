@@ -1,44 +1,53 @@
-# Ignore all files in data_cards (keep the folder if you want)
+# Ignore all files in data_cards directory
 data_cards/*
+
+# Don't ignore the data_cards directory itself
 !data_cards/.gitkeep
 
-# Output files
-consumos_totales.csv
-consumos_totales.txt
-
-# Python cache and compiled files
+# Python specific ignores
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual environments
-.venv/
 venv/
 ENV/
 env/
 
-# Build/dist
-build/
-dist/
-*.egg-info/
-
-# IDE/editor
-.vscode/
+# IDE specific files
 .idea/
+.vscode/
 *.swp
+*.swo
+*~
 
-# Logs and temp
-*.log
-*.tmp
-
-# pytest
-.pytest_cache/
-
-# Jupyter
+# Jupyter Notebook
 .ipynb_checkpoints
 
 # macOS
 .DS_Store
+
+# Temporary files
+tmp_debug/
+*.log
+
+# CSV output files (optional - uncomment if you want to ignore them)
+# consumos_totales.csv
 
