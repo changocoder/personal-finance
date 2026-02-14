@@ -4,6 +4,8 @@ import csv
 import shutil
 import logging
 import pdfplumber
+import urllib.request
+import json
 from collections import defaultdict
 from datetime import datetime
 
@@ -27,6 +29,66 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# COTIZACIÓN DEL DÓLAR
+# =============================================================================
+
+def obtener_cotizacion_dolar_oficial():
+    """
+    Obtiene la cotización del dólar oficial (venta) desde la API de dolarapi.com
+    Se usa el valor de venta porque es el más alto y representa el costo real de compra.
+
+    Returns:
+        float: Cotización del dólar oficial para venta, o None si falla
+    """
+    urls = [
+        'https://dolarapi.com/v1/dolares/oficial',
+        'https://api.bluelytics.com.ar/v2/latest'
+    ]
+
+    for url in urls:
+        try:
+            logger.info(f"Obteniendo cotización del dólar desde: {url}")
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode())
+
+                # dolarapi.com format
+                if 'venta' in data:
+                    cotizacion = float(data['venta'])
+                    logger.info(f"✓ Cotización dólar oficial (venta): ${cotizacion:.2f}")
+                    return cotizacion
+
+                # bluelytics format
+                if 'oficial' in data:
+                    cotizacion = float(data['oficial']['value_sell'])
+                    logger.info(f"✓ Cotización dólar oficial (venta): ${cotizacion:.2f}")
+                    return cotizacion
+
+        except Exception as e:
+            logger.warning(f"Error obteniendo cotización de {url}: {e}")
+            continue
+
+    logger.error("No se pudo obtener la cotización del dólar. Usando valor por defecto.")
+    return None
+
+
+def pesificar_monto(monto_usd, cotizacion):
+    """
+    Convierte un monto en USD a ARS usando la cotización proporcionada.
+
+    Args:
+        monto_usd (float): Monto en dólares
+        cotizacion (float): Cotización del dólar
+
+    Returns:
+        float: Monto en pesos argentinos
+    """
+    if cotizacion is None or monto_usd is None:
+        return None
+    return round(monto_usd * cotizacion, 2)
 
 
 # =============================================================================
@@ -151,21 +213,33 @@ def detectar_moneda(descripcion):
     """
     Detecta la moneda del consumo basándose en la descripción.
     Retorna: 'USD', 'BRL' o 'ARS'
+
+    Nota: En formato Galicia (PAIS,MONEDA,monto), los consumos internacionales
+    siempre se cobran en USD, independientemente de la moneda original.
     """
     desc_upper = descripcion.upper()
 
-    # Detectar USD
+    # Detectar USD explícito
     if ' USD ' in desc_upper or desc_upper.endswith(' USD') or ',USD,' in desc_upper:
         return 'USD'
 
-    # Detectar BRL
+    # Detectar BRL explícito
     if ' BRL ' in desc_upper or desc_upper.endswith(' BRL') or ',BRL,' in desc_upper:
         return 'BRL'
 
     # Detectar formato Galicia: (PAIS,MONEDA, monto)
-    match_galicia = re.search(r'\([A-Z]{3},(USD|BRL|ARS),', desc_upper)
+    # En este formato, los consumos internacionales (cualquier país != ARG) se cobran en USD
+    match_galicia = re.search(r'\(([A-Z]{3}),(USD|BRL|ARS),', desc_upper)
     if match_galicia:
-        return match_galicia.group(1)
+        pais = match_galicia.group(1)
+        moneda_original = match_galicia.group(2)
+        # Si el país NO es Argentina, el consumo se cobra en USD (conversión)
+        if pais != 'ARG':
+            return 'USD'
+        # Si es Argentina y la moneda es ARS, es un consumo local
+        if moneda_original == 'ARS':
+            return 'ARS'
+        return moneda_original
 
     return 'ARS'
 
@@ -240,12 +314,24 @@ def procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco
 
         monto_para_registro = monto_detectado
         moneda_final = moneda_detectada
-        conversion_brl_a_usd = False
-        if moneda_detectada == 'BRL' and len(montos_en_linea) > 1:
+        conversion_extranjera = False
+
+        # Detectar si es formato Galicia con consumo internacional (PAIS,MONEDA,monto)
+        es_formato_galicia = re.search(r'\([A-Z]{3},(USD|BRL|ARS),', descripcion_limpia.upper())
+
+        # Si es consumo internacional (BRL o formato Galicia extranjero) y hay múltiples montos,
+        # el último monto es la conversión a USD
+        if moneda_detectada == 'USD' and es_formato_galicia and len(montos_en_linea) > 1:
+            monto_convertido = montos_en_linea[-1]
+            if monto_convertido != monto_detectado:
+                conversion_extranjera = True
+                monto_para_registro = monto_convertido
+                moneda_final = 'USD'
+        elif moneda_detectada == 'BRL' and len(montos_en_linea) > 1:
             monto_convertido = montos_en_linea[-1]
             # Solo aplica conversión si realmente hay un segundo monto distinto o posición posterior
             if montos_en_linea.index(monto_convertido) != 0 or monto_convertido != monto_detectado:
-                conversion_brl_a_usd = True
+                conversion_extranjera = True
                 monto_para_registro = monto_convertido
                 moneda_final = 'USD'
 
@@ -263,9 +349,9 @@ def procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco
             # Contadores por moneda
             if moneda_final == 'USD':
                 consumos_usd += 1
-                if conversion_brl_a_usd:
+                if conversion_extranjera:
                     logger.info(
-                        "Conversión BRL→USD [%s] %s | BRL %s -> USD %s",
+                        "Conversión moneda extranjera→USD [%s] %s | Original %s -> USD %s",
                         fecha,
                         descripcion_final[:60],
                         monto_detectado,
@@ -514,15 +600,36 @@ def procesar_duplicados(consumos_totales):
 # EXPORTACIÓN Y REPORTES
 # =============================================================================
 
-def guardar_csv(consumos, archivo_salida='consumos_totales.csv'):
-    """Guarda los consumos en un archivo CSV."""
-    fieldnames = ['fecha', 'descripcion', 'monto', 'moneda', 'tarjeta', 'numero_tarjeta', 'banco', 'categoria', 'duplicado']
+def guardar_csv(consumos, cotizacion_dolar, archivo_salida='consumos_totales.csv'):
+    """
+    Guarda los consumos en un archivo CSV.
+    Para consumos en USD, agrega el monto pesificado.
+    Para consumos en ARS, deja vacía la columna monto_ars.
+    Incluye metadata con la cotización del dólar utilizada.
+    """
+    fieldnames = ['fecha', 'descripcion', 'monto', 'moneda', 'monto_ars', 'tarjeta', 'numero_tarjeta', 'banco', 'categoria', 'duplicado']
 
     with open(archivo_salida, 'w', newline='', encoding='utf-8') as csvfile:
+        # Escribir metadata como comentario al inicio
+        fecha_proceso = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        csvfile.write(f"# Archivo generado: {fecha_proceso}\n")
+        csvfile.write(f"# Cotización dólar oficial (venta): ${cotizacion_dolar:.2f}\n" if cotizacion_dolar else "# Cotización dólar: No disponible\n")
+        csvfile.write(f"# Total consumos: {len(consumos)}\n")
+        csvfile.write("#\n")
+
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for row in consumos:
-            writer.writerow({k: row[k] for k in fieldnames})
+            # Calcular monto_ars solo para consumos en USD
+            if row['moneda'] == 'USD' and cotizacion_dolar:
+                monto_ars = pesificar_monto(row['monto'], cotizacion_dolar)
+            else:
+                # Para ARS u otras monedas, dejar vacío
+                monto_ars = ''
+
+            row_to_write = {k: row[k] for k in fieldnames if k != 'monto_ars'}
+            row_to_write['monto_ars'] = monto_ars
+            writer.writerow(row_to_write)
 
     return len(consumos)
 
@@ -545,10 +652,12 @@ def log_resumen_categorias(consumos):
         logger.info(f"  {cat}: {count} consumos | Total: ${monto:,.2f}")
 
 
-def log_resumen_final(cantidad_guardados):
+def log_resumen_final(cantidad_guardados, cotizacion_dolar=None):
     """Loguea el resumen final del procesamiento."""
     logger.info(f"\n✓ Proceso finalizado exitosamente")
     logger.info(f"✓ Consumos guardados en CSV: {cantidad_guardados}")
+    if cotizacion_dolar:
+        logger.info(f"✓ Cotización dólar oficial utilizada: ${cotizacion_dolar:.2f}")
     logger.info(f"✓ Archivo de salida: 'consumos_totales.csv'")
     logger.info(f"✓ Archivo de log: 'procesamiento_consumos.log'\n")
 
@@ -592,16 +701,19 @@ def main():
         logger.info(f"# PROCESANDO DUPLICADOS Y GUARDANDO RESULTADOS")
         logger.info(f"{'#'*80}\n")
 
+        # Obtener cotización del dólar para pesificar
+        cotizacion_dolar = obtener_cotizacion_dolar_oficial()
+
         # Deduplicar y marcar duplicados
         unique_consumos = procesar_duplicados(consumos_totales)
 
         # Filtrar duplicados erróneos y guardar
         consumos_a_guardar = [r for r in unique_consumos if r.get('duplicado') != 'ERROR_DUPLICADO_ARCHIVO']
-        cantidad_guardados = guardar_csv(consumos_a_guardar)
+        cantidad_guardados = guardar_csv(consumos_a_guardar, cotizacion_dolar)
 
         # Generar reportes
         log_resumen_categorias(consumos_a_guardar)
-        log_resumen_final(cantidad_guardados)
+        log_resumen_final(cantidad_guardados, cotizacion_dolar)
 
         # Limpiar archivos temporales
         if os.path.exists(carpeta_tmp):

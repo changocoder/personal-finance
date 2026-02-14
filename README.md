@@ -7,6 +7,7 @@ Aplicación para extraer y procesar consumos de tarjetas de crédito desde resú
 Esta herramienta permite:
 - Extraer automáticamente consumos de resúmenes de tarjetas VISA y Mastercard en formato PDF
 - Discriminar consumos en diferentes monedas (ARS, USD, BRL)
+- **Pesificar automáticamente los consumos en USD** usando la cotización del dólar oficial
 - **Clasificar automáticamente los consumos en categorías** (Utilities, Investment, Food, Household, Discretionary, Other)
 - Detectar y marcar posibles duplicados
 - Exportar los resultados a un archivo CSV para análisis
@@ -72,12 +73,15 @@ python main.py
 
 ## 📊 Formato del archivo CSV de salida
 
+El archivo CSV incluye metadata al inicio con la fecha de generación y cotización del dólar utilizada.
+
 | Campo | Descripción |
 |-------|-------------|
 | `fecha` | Fecha del consumo |
 | `descripcion` | Descripción del comercio/servicio |
-| `monto` | Monto del consumo |
+| `monto` | Monto del consumo (en la moneda original) |
 | `moneda` | Moneda (ARS, USD, BRL) |
+| `monto_ars` | Monto pesificado (solo para USD, vacío para ARS) |
 | `tarjeta` | Tipo de tarjeta (VISA, Mastercard) |
 | `numero_tarjeta` | Número de cuenta/tarjeta |
 | `banco` | Banco emisor |

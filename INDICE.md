@@ -67,6 +67,22 @@
    - Cómo personalizar las categorías
    - Ejemplos de clasificación
 
+### 💱 Pesificación de Consumos
+
+9. **[PESIFICACION.md](PESIFICACION.md)**
+   - Conversión automática de USD a ARS
+   - Obtención de cotización del dólar oficial
+   - Metadata incluida en el CSV
+   - Configuración de fuentes de cotización
+
+### 📝 Historial de Cambios
+
+10. **[CHANGELOG.md](CHANGELOG.md)**
+    - Registro de todas las iteraciones y cambios
+    - Nuevas funcionalidades agregadas
+    - Correcciones realizadas
+    - Refactorizaciones del código
+
 ---
 
 ## 📖 Guía de Lectura Recomendada
