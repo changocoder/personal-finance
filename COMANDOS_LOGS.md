@@ -151,6 +151,51 @@ grep "Duplicado" procesamiento_consumos.log | wc -l
 
 ---
 
+## 🏷️ Por Categoría
+
+### Ver consumos por categoría específica
+```bash
+# Utilities
+grep "Categoría: Utilities" procesamiento_consumos.log
+
+# Food
+grep "Categoría: Food" procesamiento_consumos.log
+
+# Discretionary
+grep "Categoría: Discretionary" procesamiento_consumos.log
+
+# Investment
+grep "Categoría: Investment" procesamiento_consumos.log
+
+# Household
+grep "Categoría: Household" procesamiento_consumos.log
+
+# Other (sin categorizar)
+grep "Categoría: Other" procesamiento_consumos.log
+```
+
+### Contar consumos por categoría
+```bash
+grep "Categoría:" procesamiento_consumos.log | sort | uniq -c
+```
+
+### Ver resumen de categorías
+```bash
+grep "Resumen por Categorías" -A 10 procesamiento_consumos.log
+```
+
+### Ver consumos de Food con sus montos
+```bash
+grep -B1 "Categoría: Food" procesamiento_consumos.log | grep "Consumo \["
+```
+
+### Ver consumos Discretionary con sus montos
+```bash
+grep -B1 "Categoría: Discretionary" procesamiento_consumos.log | grep "Consumo \["
+```
+
+---
+
 ## 💳 Por Tarjeta
 
 ### Ver consumos de VISA
@@ -165,12 +210,17 @@ grep "Consumo \[" procesamiento_consumos.log | grep -i "master"
 
 ### Ver consumos en USD
 ```bash
-grep "Consumo USD" procesamiento_consumos.log
+grep "Monto: USD" procesamiento_consumos.log
+```
+
+### Ver consumos en BRL
+```bash
+grep "Monto: BRL" procesamiento_consumos.log
 ```
 
 ### Ver consumos en ARS
 ```bash
-grep "Consumo \[" procesamiento_consumos.log | grep -v "USD"
+grep "Monto: ARS" procesamiento_consumos.log
 ```
 
 ---
@@ -409,4 +459,3 @@ grep "Consumos guardados" procesamiento_consumos.log
 ---
 
 **Nota**: Después de ejecutar `python main.py`, el archivo `procesamiento_consumos.log` se sobrescribe. Si quieres guardar un log anterior, renómbralo primero.
-

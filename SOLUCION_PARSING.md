@@ -26,11 +26,13 @@ El problema es que `.+?` (descripción) capturaba todo hasta encontrar el primer
 
 ## ✅ Solución Implementada
 
-Se mejoró el regex para ser más específico:
+Se mejoró el regex y se añadió discriminación de moneda:
 
 ```python
 # DESPUÉS (correcto)
 patron_linea = re.compile(r"^(\d{2}[./-][A-Za-z0-9]{2,3}[./-]\d{2})\s+(.+?[^\s\d])\s+([\d.,]+)(?:\s|$)", re.MULTILINE)
+
+moneda = detectar_moneda(descripcion)
 ```
 
 ### Cambios Clave:
@@ -49,6 +51,8 @@ patron_linea = re.compile(r"^(\d{2}[./-][A-Za-z0-9]{2,3}[./-]\d{2})\s+(.+?[^\s\d
        continue
    ```
    - Asegura que solo se procesen valores con puntos o comas (formatos de montos válidos)
+
+4. **Detección de moneda**: Ahora se detecta si la descripción contiene `USD`, `BRL` o formato `(PAIS,MONEDA, ...)`, guardando la moneda correcta en el CSV
 
 ## 📋 Cambios Realizados en el Código
 
@@ -89,4 +93,3 @@ patron_linea = re.compile(r"^(\d{2}[./-][A-Za-z0-9]{2,3}[./-]\d{2})\s+(.+?[^\s\d
 ---
 
 **Fecha de solución**: Diciembre 2025
-

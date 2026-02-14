@@ -22,13 +22,17 @@ Este archivo contiene un ejemplo de cómo se ve el output completo del logging c
 Procesando VISA - Total de líneas encontradas: 45
 ================================================================================
 
-2025-12-09 10:45:23,260 - INFO - Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0  | Monto: $84431.00
+2025-12-09 10:45:23,260 - INFO - Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0  | Monto: ARS 84431.00
+2025-12-09 10:45:23,260 - INFO -   -> Categoría: Utilities
 2025-12-09 10:45:23,261 - DEBUG - Monto convertido - Original: '84431,0' -> Limpio: '84431.0' -> Final: 84431.0
-2025-12-09 10:45:23,262 - INFO - Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75 USD 2 | Monto: $2.00
+2025-12-09 10:45:23,262 - INFO - Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75 USD 2 | Monto: USD 2.00
+2025-12-09 10:45:23,262 - INFO -   -> Categoría: Utilities
 2025-12-09 10:45:23,263 - DEBUG - Monto convertido - Original: '2,00' -> Limpio: '2.00' -> Final: 2.0
-2025-12-09 10:45:23,264 - INFO - Consumo [21.07.25] 082803 APPLE.COM/BILL USD 8         | Monto: $8.00
+2025-12-09 10:45:23,264 - INFO - Consumo [21.07.25] 082803 APPLE.COM/BILL USD 8         | Monto: USD 8.00
+2025-12-09 10:45:23,264 - INFO -   -> Categoría: Utilities
 2025-12-09 10:45:23,265 - DEBUG - Monto convertido - Original: '8,00' -> Limpio: '8.00' -> Final: 8.0
-2025-12-09 10:45:23,266 - INFO - Consumo [23.07.25] 582401* MERPAGO*NIKEARGENTINA Cuota | Monto: $8500.00
+2025-12-09 10:45:23,266 - INFO - Consumo [23.07.25] 582401* MERPAGO*NIKEARGENTINA Cuota | Monto: ARS 8500.00
+2025-12-09 10:45:23,266 - INFO -   -> Categoría: Discretionary
 2025-12-09 10:45:23,267 - DEBUG - Monto convertido - Original: '8.500,00' -> Limpio: '8500.00' -> Final: 8500.0
 2025-12-09 10:45:23,268 - DEBUG - Línea excluida [24.07.25] DB IVA $ 21% 35.537 (contiene palabra excluida)
 2025-12-09 10:45:23,269 - DEBUG - Línea excluida [24.07.25] IVA RG 4240 21%( 3762 (contiene palabra excluida)
@@ -39,7 +43,11 @@ Procesando VISA - Total de líneas encontradas: 45
 ... (más consumos) ...
 
 2025-12-09 10:45:23,300 - INFO - Consumos en USD encontrados: 5
-2025-12-09 10:45:23,301 - INFO - Consumo USD [01.07.25] SUBSCRIPTION NETFLIX USD 15    | Monto: $15.00
+2025-12-09 10:45:23,301 - INFO - Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75 | Monto: USD      2.00
+2025-12-09 10:45:23,305 - INFO - Consumo [03.07.25] K CAFÉ BRASIL | Monto: BRL     35.60
+2025-12-09 10:45:23,310 - INFO - --- Resumen de extracción para VISA ---
+2025-12-09 10:45:23,311 - INFO - Total consumos: 42 | ARS: 30 | USD: 10 | BRL: 2
+2025-12-09 10:45:23,312 - INFO - Consumo [01.07.25] SUBSCRIPTION NETFLIX USD 15    | Monto: $15.00
 2025-12-09 10:45:23,302 - INFO - Consumo USD [15.07.25] COMPRA AMAZON USD 45           | Monto: $45.00
 2025-12-09 10:45:23,310 - INFO - Total de consumos extraídos para VISA: 42
 ================================================================================
@@ -98,11 +106,20 @@ Procesando VISA - Total de líneas encontradas: 52
 2025-12-09 10:45:24,080 - WARNING - Duplicado detectado en mismo archivo: 11.07.25 - COMPRA ELECTRODOMESTICOS - $3500.00
 2025-12-09 10:45:24,090 - INFO - Duplicado por similitud detectado: 15.07.25 - PRIMEVIDEO - $99.99
 2025-12-09 10:45:24,100 - INFO - Duplicado por similitud detectado: 20.07.25 - PRIMEVIDEO - $99.99
+2025-12-09 10:45:24,120 - INFO - 
+2025-12-09 10:45:24,121 - INFO - --- Resumen por Categorías ---
+2025-12-09 10:45:24,122 - INFO -   Utilities: 45 consumos | Total: $182,452.08
+2025-12-09 10:45:24,123 - INFO -   Investment: 2 consumos | Total: $50,000.00
+2025-12-09 10:45:24,124 - INFO -   Food: 32 consumos | Total: $89,158.12
+2025-12-09 10:45:24,125 - INFO -   Household: 8 consumos | Total: $45,000.00
+2025-12-09 10:45:24,126 - INFO -   Discretionary: 58 consumos | Total: $237,092.35
+2025-12-09 10:45:24,127 - INFO -   Other: 7 consumos | Total: $12,345.00
 2025-12-09 10:45:24,150 - INFO - 
 2025-12-09 10:45:24,151 - INFO - ✓ Proceso finalizado exitosamente
 2025-12-09 10:45:24,152 - INFO - ✓ Consumos guardados en CSV: 152
 2025-12-09 10:45:24,153 - INFO - ✓ Archivo de salida: 'consumos_totales.csv'
 2025-12-09 10:45:24,154 - INFO - ✓ Archivo de log: 'procesamiento_consumos.log'
+2025-12-09 10:45:24,155 - INFO - Resumen final por moneda: ARS=120 | USD=25 | BRL=7
 ```
 
 ## Explicación del Output
@@ -115,10 +132,11 @@ Procesando VISA - Total de líneas encontradas: 52
    - Método de apertura (con/sin contraseña)
    - Tipo y número de tarjeta detectado
    - Número total de líneas encontradas
-   - Cada consumo extraído con su monto
+   - Cada consumo extraído con su monto y **categoría asignada**
    - Total de consumos de ese archivo
 3. **Deduplicación**: Resumen de duplicados encontrados
-4. **Resumen final**: Resultado final del proceso
+4. **Resumen por Categorías**: Cantidad y montos totales por categoría
+5. **Resumen final**: Resultado final del proceso
 
 ## Información que Extraes de Aquí
 
@@ -149,4 +167,3 @@ Esto te permite verificar que los formatos se convirtieron correctamente.
 - **DEBUG** (gris): Información técnica detallada
 
 Este ejemplo debería ayudarte a entender qué esperar cuando ejecutes tu script.
-

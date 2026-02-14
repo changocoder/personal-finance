@@ -58,6 +58,15 @@
    - Cómo funciona ahora
    - Mejoras realizadas
 
+### 🏷️ Clasificación de Consumos
+
+8. **[CATEGORIAS.md](CATEGORIAS.md)**
+   - Sistema de clasificación automática
+   - Categorías disponibles (Utilities, Investment, Food, Household, Discretionary, Other)
+   - Palabras clave por categoría
+   - Cómo personalizar las categorías
+   - Ejemplos de clasificación
+
 ---
 
 ## 📖 Guía de Lectura Recomendada

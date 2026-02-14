@@ -1,183 +1,227 @@
-# Personal Finance App
+# 💳 Personal Finance App
 
-Una aplicación para extraer y procesar consumos de tarjetas de crédito desde archivos PDF de resúmenes bancarios.
+Aplicación para extraer y procesar consumos de tarjetas de crédito desde resúmenes en PDF.
 
 ## 📋 Descripción
 
-Esta aplicación automatiza la extracción de consumos de tarjetas de crédito a partir de archivos PDF de resúmenes. Soporta múltiples tipos de tarjetas (VISA, Mastercard) y detecta automáticamente información como:
+Esta herramienta permite:
+- Extraer automáticamente consumos de resúmenes de tarjetas VISA y Mastercard en formato PDF
+- Discriminar consumos en diferentes monedas (ARS, USD, BRL)
+- **Clasificar automáticamente los consumos en categorías** (Utilities, Investment, Food, Household, Discretionary, Other)
+- Detectar y marcar posibles duplicados
+- Exportar los resultados a un archivo CSV para análisis
+- Registrar logs detallados con totales por moneda, categoría y trazabilidad de conversiones
 
-- Fecha del consumo
-- Descripción del comercio
-- Monto en ARS o USD
-- Tipo de tarjeta
-- Número de tarjeta
-- Banco emisor
+## 🚀 Instalación
 
-Además, identifica y marca duplicados automáticamente.
-
-## 🚀 Características
-
-- ✅ Extracción de texto desde PDFs (con o sin contraseña)
-- ✅ Detección automática del tipo de tarjeta y banco
-- ✅ Procesamiento de montos en ARS y USD
-- ✅ Eliminación de duplicados
-- ✅ Exportación a CSV
-- ✅ Manejo robusto de errores
-
-## 📁 Estructura del Proyecto
-
-```
-personal-finance-app/
-├── main.py                    # Script principal de procesamiento
-├── extract_text.py            # Módulo de extracción de texto desde PDFs
-├── requirements.txt           # Dependencias del proyecto
-├── consumos_totales.csv       # Archivo de salida con consumos procesados
-├── data_cards/                # Carpeta con archivos PDF de resúmenes (ignorada en git)
-│   └── .gitkeep
-├── .gitignore                 # Configuración de git
-└── README.md                  # Este archivo
-```
-
-## 📦 Requisitos
-
-- Python 3.8+
+### Requisitos previos
+- Python 3.8 o superior
 - pip (gestor de paquetes de Python)
 
-## 🔧 Instalación
+### Pasos de instalación
 
-1. Clona o descarga este repositorio
-2. Instala las dependencias:
+1. Clonar el repositorio:
+```bash
+git clone <url-del-repositorio>
+cd personal-finance-app
+```
 
+2. Crear un entorno virtual (recomendado):
+```bash
+python -m venv venv
+source venv/bin/activate  # En Linux/Mac
+# o
+venv\Scripts\activate  # En Windows
+```
+
+3. Instalar las dependencias:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Coloca tus archivos PDF en la carpeta `data_cards/`
+## 📁 Estructura del proyecto
 
-## 🎯 Uso
+```
+personal-finance-app/
+├── main.py                    # Script principal
+├── constants.py               # Constantes y configuración (categorías, palabras clave)
+├── requirements.txt           # Dependencias del proyecto
+├── data_cards/               # Carpeta para los PDFs (ignorada por git)
+│   └── .gitkeep
+├── consumos_totales.csv      # Archivo de salida con los consumos
+├── procesamiento_consumos.log # Log detallado del procesamiento
+└── README.md
+```
 
-Ejecuta el script principal:
+## 📖 Uso
+
+### 1. Colocar los PDFs
+
+Coloca tus resúmenes de tarjetas en formato PDF en la carpeta `data_cards/`.
+
+### 2. Ejecutar el procesamiento
 
 ```bash
 python main.py
 ```
 
-El script:
-1. Buscará todos los archivos PDF en la carpeta `data_cards/`
-2. Extraerá el texto de cada PDF
-3. Parseará los consumos detectados
-4. Guardará los resultados en `consumos_totales.csv`
-5. Generará un archivo de log `procesamiento_consumos.log` con todos los detalles
+### 3. Revisar los resultados
 
-### Verificar Resultados
+- **consumos_totales.csv**: Archivo con todos los consumos extraídos (incluye columna de moneda)
+- **procesamiento_consumos.log**: Log detallado del proceso (incluye resumen ARS/USD/BRL)
 
-Después de ejecutar, puedes ver:
-
-- **Consumos extraídos**: en `consumos_totales.csv`
-- **Detalles del procesamiento**: en `procesamiento_consumos.log`
-- **Montos convertidos**: en `procesamiento_consumos.log` (ver GUIA_LOGGING.md)
-
-### Contraseña de PDFs
-
-Si tus PDFs están protegidos con contraseña, edita la variable `password_pdf` en `main.py`:
-
-```python
-password_pdf = 'tu_contraseña_aqui'
-```
-
-### 📊 Logging y Depuración
-
-El script genera un archivo de log automáticamente (`procesamiento_consumos.log`) que contiene:
-
-- ✅ Cada consumo extraído con fecha, descripción y monto
-- ✅ Conversión de montos paso a paso (para verificar)
-- ✅ Avisos sobre consumos excluidos o inválidos
-- ✅ Detalles sobre duplicados detectados
-- ✅ Resumen del procesamiento
-
-Para aprender cómo usar los logs, consulta `GUIA_LOGGING.md`
-
-Ejemplo rápido:
-```bash
-# Ver consumos extraídos
-grep "Consumo \[" procesamiento_consumos.log
-
-# Buscar un consumo específico
-grep "APPLE" procesamiento_consumos.log
-
-# Ver montos inválidos
-grep "inválido" procesamiento_consumos.log
-```
-
-## 📊 Formato de Salida
-
-El archivo `consumos_totales.csv` contiene las siguientes columnas:
+## 📊 Formato del archivo CSV de salida
 
 | Campo | Descripción |
 |-------|-------------|
-| fecha | Fecha del consumo (dd.mm.yy) |
-| descripcion | Descripción del comercio |
-| monto | Monto del consumo |
-| moneda | Moneda (ARS o USD) |
-| tarjeta | Tipo de tarjeta (VISA, Mastercard, etc.) |
-| numero_tarjeta | Número de tarjeta (últimos dígitos) |
-| banco | Código del banco emisor |
-| duplicado | Indica si es un duplicado (SI/NO/ERROR_DUPLICADO_ARCHIVO) |
+| `fecha` | Fecha del consumo |
+| `descripcion` | Descripción del comercio/servicio |
+| `monto` | Monto del consumo |
+| `moneda` | Moneda (ARS, USD, BRL) |
+| `tarjeta` | Tipo de tarjeta (VISA, Mastercard) |
+| `numero_tarjeta` | Número de cuenta/tarjeta |
+| `banco` | Banco emisor |
+| `categoria` | Categoría del consumo (ver sección Categorías) |
+| `duplicado` | Indica si el consumo es un posible duplicado |
+
+## 🏷️ Categorías de Consumos
+
+Los consumos se clasifican automáticamente en las siguientes categorías:
+
+| Categoría | Descripción | Ejemplos |
+|-----------|-------------|----------|
+| **Utilities** | Servicios y suscripciones | Netflix, Spotify, YouTube, servicios de luz/gas, seguros, viajes |
+| **Investment** | Inversiones y finanzas | Plazo fijo, FCI, criptomonedas, brokers |
+| **Food** | Alimentación y supermercados | Restaurantes, cafeterías, supermercados, farmacias, delivery |
+| **Household** | Hogar y electrodomésticos | Ferreterías, electrodomésticos, muebles, limpieza |
+| **Discretionary** | Gastos discrecionales | Ropa, entretenimiento, transporte, compras online |
+| **Other** | Sin categorizar | Consumos que no coinciden con ninguna categoría |
+
+### Palabras clave por categoría
+
+<details>
+<summary>Ver detalle de palabras clave</summary>
+
+**Utilities:**
+- Streaming: NETFLIX, SPOTIFY, YOUTUBE, PRIME, DISNEY, HBO
+- Tech: GOOGLE, APPLE, ADOBE, MICROSOFT, ICLOUD
+- Servicios: CLARO, MOVISTAR, EDENOR, METROGAS, AYSA
+- Seguros: SEGURO, LACAJASEGURO
+- Viajes: KIWI.COM, AIRBNB, BOOKING, DESPEGAR
+
+**Investment:**
+- INVERSION, PLAZO FIJO, FCI, FONDOS
+- Crypto: LEMON, BUENBIT, BINANCE, RIPIO
+- Bolsa: BROKER, CEDEAR, ACCIONES
+
+**Food:**
+- Restaurantes: RESTAURANT, CAFE, PIZZA, BURGER, STARBUCKS
+- Delivery: RAPPI, PEDIDOSYA, GLOVO
+- Supermercados: CARREFOUR, COTO, JUMBO, DISCO, WALMART
+- Otros: FARMACIA, PANADERIA, VERDULERIA
+
+**Household:**
+- EASY, SODIMAC, FERRETERIA
+- Electro: GARBARINO, FRAVEGA, MUSIMUNDO
+- MUEBLERIA, BLANQUERIA, LIMPIEZA
+
+**Discretionary:**
+- Ropa: NIKE, ADIDAS, ZARA, FALABELLA, RENNER
+- Compras: MERCADOLIBRE, MERPAGO
+- Transporte: UBER, CABIFY, METRO, SUBTE
+- Entretenimiento: CINE, TEATRO, EVENTO
+
+</details>
+
+## 🔐 PDFs protegidos con contraseña
+
+Si tus PDFs están protegidos con contraseña, puedes configurarla de dos formas:
+
+1. **Variable de entorno** (recomendado):
+```bash
+export PDF_PASSWORD="tu_contraseña"
+```
+
+2. **Directamente en el código** (no recomendado para producción):
+Modifica la variable `password_pdf` en la función `main()`.
+
+## 🪙 Monedas soportadas
+
+La aplicación detecta automáticamente las siguientes monedas:
+- **ARS**: Pesos argentinos (por defecto)
+- **USD**: Dólares estadounidenses
+- **BRL**: Reales brasileños
+
+## 📝 Logs
+
+El archivo `procesamiento_consumos.log` contiene información detallada:
+- Archivos procesados
+- Consumos extraídos con sus montos y monedas
+- **Categoría asignada a cada consumo**
+- Resumen de cantidades por moneda (ARS, USD, BRL)
+- **Resumen de consumos por categoría con totales**
+- Duplicados detectados
+- Errores de procesamiento
 
 ## ⚙️ Configuración
 
-En `main.py` puedes personalizar:
-
-- **CARPETA_RESUMENES**: Carpeta donde buscar PDFs (default: `data_cards/`)
-- **ARCHIVO_SALIDA**: Nombre del archivo de salida (default: `consumos_totales.txt`)
-- **PALABRAS_A_EXCLUIR**: Palabras clave para filtrar líneas que no son consumos
+En el archivo `constants.py` puedes modificar:
 
 ```python
+# Carpeta donde se encuentran los PDFs
+CARPETA_RESUMENES = 'data_cards/'
+
+# Archivo de salida
+ARCHIVO_SALIDA = 'consumos_totales.txt'
+
+# Palabras para excluir (no son consumos reales)
 PALABRAS_A_EXCLUIR = [
     'SALDO ANTERIOR', 'SU PAGO', 'IMPUESTO', 'IVA', 'DB.RG',
-    'SALDO ACTUAL', 'PAGO MINIMO', 'Total Consumos',
-    'DEV.IMP.'
+    'SALDO ACTUAL', 'PAGO MINIMO', 'Total Consumos', 'DEV.IMP.'
 ]
+
+# Categorías de consumos (puedes agregar/modificar palabras clave)
+CATEGORIAS_CONSUMOS = {
+    'Utilities': ['NETFLIX', 'SPOTIFY', ...],
+    'Investment': ['INVERSION', 'PLAZO FIJO', ...],
+    'Food': ['RESTAURANT', 'SUPERMERCADO', ...],
+    'Household': ['FERRETERIA', 'GARBARINO', ...],
+    'Discretionary': ['NIKE', 'MERCADOLIBRE', ...]
+}
+
+# Categoría por defecto
+CATEGORIA_DEFAULT = 'Other'
+
+# Orden de categorías para reportes
+CATEGORIAS_ORDEN = ['Utilities', 'Investment', 'Food', 'Household', 'Discretionary', 'Other']
 ```
 
-## 🐛 Detección de Duplicados
+## 🛡️ Privacidad
 
-El script detecta duplicados de dos formas:
+El archivo `.gitignore` está configurado para:
+- **NO** subir los PDFs de tus resúmenes
+- **NO** subir el archivo CSV con tus consumos
+- **NO** subir los logs de procesamiento
 
-1. **Duplicados exactos**: Mismo consumo en el mismo archivo
-2. **Duplicados por similitud**: Mismo monto, tarjeta y descripción similar en archivos diferentes (dentro de ±5 días)
+Esto protege tu información financiera personal.
 
-## 📝 Notas Importantes
+## 🐛 Solución de problemas
 
-- Los archivos PDF en `data_cards/` son ignorados por git (.gitignore)
-- Se recomienda mantener una copia de seguridad de tus archivos PDF
-- El script genera archivos temporales en `data_cards/tmp_debug/` que se eliminan automáticamente al finalizar
-- Los montos se procesan como valores positivos (se ignora el signo en el PDF)
+### Error al abrir PDF
+- Verifica que el archivo no esté corrupto
+- Si está protegido, asegúrate de configurar la contraseña correcta
 
-## 🔐 Privacidad y Seguridad
+### No se detectan consumos
+- Revisa el log para ver el texto extraído
+- Algunos formatos de PDF pueden no ser compatibles
 
-- Los datos de tus tarjetas se procesan localmente
-- No se envía información a servidores externos
-- Se recomienda no compartir el archivo `consumos_totales.csv` ni los PDFs
-
-## 🤝 Contribuciones
-
-Las contribuciones son bienvenidas. Por favor:
-
-1. Realiza un fork del proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+### Montos incorrectos
+- Los montos se procesan considerando el formato argentino (punto como separador de miles, coma como decimal)
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detalles.
+MIT License
 
-## 📞 Contacto y Soporte
+## 🤝 Contribuciones
 
-Si encuentras problemas o tienes sugerencias, por favor abre un issue en el repositorio.
-
----
-
-**Última actualización**: Diciembre 2025
+Las contribuciones son bienvenidas. Por favor, abre un issue para discutir cambios mayores.

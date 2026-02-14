@@ -1,7 +1,21 @@
 import os
 import re
+import csv
+import shutil
 import logging
 import pdfplumber
+from collections import defaultdict
+from datetime import datetime
+
+from constants import (
+    CARPETA_RESUMENES,
+    ARCHIVO_SALIDA,
+    NOMBRE_VARIABLE_ENTORNO,
+    PALABRAS_A_EXCLUIR,
+    CATEGORIAS_CONSUMOS,
+    CATEGORIA_DEFAULT,
+    CATEGORIAS_ORDEN
+)
 
 # --- CONFIGURACIÓN DE LOGGING ---
 logging.basicConfig(
@@ -14,22 +28,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- CONFIGURACIÓN ---
-# 1. Carpeta donde se encuentran tus resúmenes en PDF.
-CARPETA_RESUMENES = 'data_cards/'
 
-# 2. Nombre del archivo de texto donde se guardarán los resultados.
-ARCHIVO_SALIDA = 'consumos_totales.txt'
+# =============================================================================
+# UTILIDADES DE PARSING Y LIMPIEZA
+# =============================================================================
 
-# 3. Nombre de la variable de entorno que contiene la contraseña de los PDFs.
-NOMBRE_VARIABLE_ENTORNO = 'PDF_PASSWORD'
 
-# 4. Palabras clave para identificar y excluir filas que NO son consumos.
-PALABRAS_A_EXCLUIR = [
-    'SALDO ANTERIOR', 'SU PAGO', 'IMPUESTO', 'IVA', 'DB.RG',
-    'SALDO ACTUAL', 'PAGO MINIMO', 'Total Consumos',
-    'DEV.IMP.'
-]
+
+def clasificar_consumo(descripcion):
+    """
+    Clasifica un consumo en una categoría basándose en la descripción.
+
+    Args:
+        descripcion (str): Descripción del consumo
+
+    Returns:
+        str: Categoría del consumo (Utilities, Investment, Food, Household, Discretionary, Other)
+    """
+    if not descripcion:
+        return CATEGORIA_DEFAULT
+
+    desc_upper = descripcion.upper()
+
+    for categoria, palabras_clave in CATEGORIAS_CONSUMOS.items():
+        for palabra in palabras_clave:
+            if palabra in desc_upper:
+                logger.debug(f"Consumo '{descripcion[:40]}' clasificado como '{categoria}' por palabra clave '{palabra}'")
+                return categoria
+
+    return CATEGORIA_DEFAULT
 
 
 def limpiar_monto(monto_str, fecha="", descripcion=""):
@@ -104,34 +131,92 @@ def extraer_datos_tarjeta(texto):
     match_banco = re.search(r'SUCURSAL[:\s-]*([\w\s]+)', texto, re.IGNORECASE)
     if match_banco:
         banco = match_banco.group(1).strip()
+        # Limpiar saltos de línea y espacios múltiples
+        banco = re.sub(r'[\n\r]+', ' ', banco).strip()
+        banco = re.sub(r'\s+', ' ', banco)
     else:
         match_banco2 = re.search(r'BANCO[:\s-]*([\w\s]+)', texto, re.IGNORECASE)
         if match_banco2:
             banco = match_banco2.group(1).strip()
+            banco = re.sub(r'[\n\r]+', ' ', banco).strip()
+            banco = re.sub(r'\s+', ' ', banco)
     return numero, banco
 
+
+# =============================================================================
+# DETECCIÓN DE MONEDA Y CLASIFICACIÓN
+# =============================================================================
+
+def detectar_moneda(descripcion):
+    """
+    Detecta la moneda del consumo basándose en la descripción.
+    Retorna: 'USD', 'BRL' o 'ARS'
+    """
+    desc_upper = descripcion.upper()
+
+    # Detectar USD
+    if ' USD ' in desc_upper or desc_upper.endswith(' USD') or ',USD,' in desc_upper:
+        return 'USD'
+
+    # Detectar BRL
+    if ' BRL ' in desc_upper or desc_upper.endswith(' BRL') or ',BRL,' in desc_upper:
+        return 'BRL'
+
+    # Detectar formato Galicia: (PAIS,MONEDA, monto)
+    match_galicia = re.search(r'\([A-Z]{3},(USD|BRL|ARS),', desc_upper)
+    if match_galicia:
+        return match_galicia.group(1)
+
+    return 'ARS'
+
+
+# =============================================================================
+# PROCESAMIENTO DE TEXTO Y EXTRACCIÓN DE CONSUMOS
+# =============================================================================
 
 def procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco):
     """
     Extrae consumos de texto de resumen de tarjeta y los devuelve como lista de dicts para CSV.
     """
     consumos = []
+    consumos_vistos = set()  # Para evitar duplicados exactos
+
+    def extraer_linea_completa(texto, inicio):
+        fin_linea = texto.find('\n', inicio)
+        if fin_linea == -1:
+            fin_linea = len(texto)
+        linea = texto[inicio:fin_linea]
+        return linea.replace('\r', '')
+
     # Patrón original más flexible para capturar todos los consumos
     patron_linea = re.compile(r"^(\d{2}[./-][A-Za-z0-9]{2,3}[./-]\d{2})\s+(.+?)\s+([\d.]+,[\d]{2})(?:\s|$)", re.MULTILINE)
     patron_linea_alt = re.compile(r"^(\d{2}[./-]\d{2}[./-]\d{2})\s+(.+?)\s+([\d.]+,[\d]{2})(?:\s|$)", re.MULTILINE)
-    matches = patron_linea.findall(texto_completo) + patron_linea_alt.findall(texto_completo)
+    matches = []
+    spans_vistos = set()
+    for regex in (patron_linea, patron_linea_alt):
+        for match in regex.finditer(texto_completo):
+            span = match.span()
+            if span not in spans_vistos:
+                spans_vistos.add(span)
+                matches.append(match)
+    matches.sort(key=lambda m: m.start())
 
     logger.info(f"\n{'='*80}")
     logger.info(f"Procesando {nombre_tarjeta} - Total de líneas encontradas: {len(matches)}")
     logger.info(f"{'='*80}")
 
     consumos_extraidos = 0
+    consumos_ars = 0
+    consumos_usd = 0
+    consumos_brl = 0
+
     for match in matches:
-        fecha, descripcion, monto = match
+        fecha = match.group(1)
+        descripcion = match.group(2)
+        monto_detectado = match.group(3)
         descripcion_limpia = descripcion.strip()
-        # Quitar tokens residuales típicos de extracción que aparecen antes del monto,
-        # p.ej. líneas como "... 028063215 -0 84.431,00" dejan un "-0" al final de la descripción.
-        # Solo eliminamos cuando es un token aislado al final (o seguido solo de comas/espacios).
+
+        # Quitar tokens residuales típicos de extracción
         descripcion_limpia = re.sub(r"[\s,]*-0[\s,]*$", "", descripcion_limpia)
         # Normalizar espacios múltiples
         descripcion_limpia = re.sub(r"\s+", " ", descripcion_limpia).strip()
@@ -141,61 +226,342 @@ def procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco
             logger.debug(f"Línea excluida [{fecha}] {descripcion_limpia[:60]} (contiene palabra excluida)")
             continue
 
-        monto_float = limpiar_monto(monto, fecha, descripcion_limpia)
+        # Detectar la moneda basándose en la descripción
+        moneda_detectada = detectar_moneda(descripcion_limpia)
+
+        # Limpiar la descripción removiendo indicadores de moneda al final
+        descripcion_final = re.sub(r'\s+(USD|BRL|ARS)\s*$', '', descripcion_limpia, flags=re.IGNORECASE).strip()
+
+        linea_completa = extraer_linea_completa(texto_completo, match.start())
+        montos_en_linea = re.findall(r'\d[\d.,]*[.,]\d{2}', linea_completa)
+        if not montos_en_linea:
+            logger.debug(f"Línea sin montos detectados, se omite: {linea_completa[:80]}")
+            continue
+
+        monto_para_registro = monto_detectado
+        moneda_final = moneda_detectada
+        conversion_brl_a_usd = False
+        if moneda_detectada == 'BRL' and len(montos_en_linea) > 1:
+            monto_convertido = montos_en_linea[-1]
+            # Solo aplica conversión si realmente hay un segundo monto distinto o posición posterior
+            if montos_en_linea.index(monto_convertido) != 0 or monto_convertido != monto_detectado:
+                conversion_brl_a_usd = True
+                monto_para_registro = monto_convertido
+                moneda_final = 'USD'
+
+        # Crear clave única para evitar duplicados exactos
+        clave_consumo = (fecha, descripcion_final, monto_para_registro, moneda_final)
+        if clave_consumo in consumos_vistos:
+            logger.debug(f"Consumo duplicado ignorado [{fecha}] {descripcion_final[:40]} {moneda_final}")
+            continue
+        consumos_vistos.add(clave_consumo)
+
+        monto_float = limpiar_monto(monto_para_registro, fecha, descripcion_final)
         if monto_float is not None and abs(monto_float) > 0:
             consumos_extraidos += 1
+
+            # Contadores por moneda
+            if moneda_final == 'USD':
+                consumos_usd += 1
+                if conversion_brl_a_usd:
+                    logger.info(
+                        "Conversión BRL→USD [%s] %s | BRL %s -> USD %s",
+                        fecha,
+                        descripcion_final[:60],
+                        monto_detectado,
+                        monto_para_registro
+                    )
+            elif moneda_final == 'BRL':
+                consumos_brl += 1
+            else:
+                consumos_ars += 1
+
+            # Log con indicador de moneda
+            desc_display = descripcion_final[:50] if descripcion_final else ''
+            formatted_monto = f"{moneda_final} {monto_float:>10.2f}"
+            logger.info(f"Consumo [{fecha}] {desc_display} | Monto: {formatted_monto}")
+
+            # Clasificar el consumo en una categoría
+            categoria = clasificar_consumo(descripcion_final)
+            logger.info(f"  -> Categoría: {categoria}")
+
             consumos.append({
                 'fecha': fecha,
-                'descripcion': descripcion_limpia,
+                'descripcion': descripcion_final,
                 'monto': abs(monto_float),
-                'moneda': 'ARS',
+                'moneda': moneda_final,
                 'tarjeta': nombre_tarjeta,
                 'numero_tarjeta': numero_tarjeta or '',
-                'banco': banco or ''
+                'banco': banco or '',
+                'categoria': categoria
             })
         else:
             logger.warning(f"Monto inválido o cero [{fecha}] {descripcion_limpia[:60]} -> {monto_float}")
 
-    # Casos especiales: consumos en dólares
-    patron_dolares = re.compile(r"^(\d{2}[./-][A-Za-z0-9]{2,3}[./-]\d{2})\s+(.+?)\s+USD\s*([\d.]+,[\d]{2})", re.MULTILINE)
-    matches_dolares = patron_dolares.findall(texto_completo)
-
-    logger.info(f"Consumos en USD encontrados: {len(matches_dolares)}")
-
-    for match in matches_dolares:
-        fecha, descripcion, monto = match
-        descripcion_limpia = descripcion.strip()
-
-        if any(palabra in descripcion_limpia.upper() for palabra in PALABRAS_A_EXCLUIR):
-            logger.debug(f"Línea USD excluida [{fecha}] {descripcion_limpia[:60]} (contiene palabra excluida)")
-            continue
-
-        monto_float = limpiar_monto(monto, fecha, descripcion_limpia)
-        if monto_float is not None and abs(monto_float) > 0:
-            consumos_extraidos += 1
-            desc_display = descripcion_limpia[:50] if isinstance(descripcion_limpia, str) and descripcion_limpia else str(descripcion_limpia)
-            formatted_monto = f"${monto_float:>10.2f}"
-            logger.info("Consumo USD [%s] %s | Monto: %s", fecha, desc_display, formatted_monto)
-            consumos.append({
-                'fecha': fecha,
-                'descripcion': descripcion_limpia,
-                'monto': abs(monto_float),
-                'moneda': 'USD',
-                'tarjeta': nombre_tarjeta,
-                'numero_tarjeta': numero_tarjeta or '',
-                'banco': banco or ''
-            })
-        else:
-            logger.warning(f"Monto USD inválido o cero [{fecha}] {descripcion_limpia[:60]} -> {monto_float}")
-
-    logger.info(f"Total de consumos extraídos para {nombre_tarjeta}: {consumos_extraidos}")
+    logger.info(f"\n--- Resumen de extracción para {nombre_tarjeta} ---")
+    logger.info(f"Total consumos: {consumos_extraidos} | ARS: {consumos_ars} | USD: {consumos_usd} | BRL: {consumos_brl}")
     logger.info(f"{'='*80}\n")
 
     return consumos
 
 
+# =============================================================================
+# PROCESAMIENTO DE PDFs
+# =============================================================================
+
+def abrir_pdf(ruta_completa, password_pdf):
+    """
+    Intenta abrir un PDF, primero sin contraseña y luego con contraseña.
+
+    Returns:
+        tuple: (pdf_object, bool_abierto)
+    """
+    pdf = None
+    abierto = False
+
+    try:
+        pdf = pdfplumber.open(ruta_completa)
+        logger.info("✓ PDF abierto sin necesidad de contraseña.")
+        abierto = True
+    except Exception as e:
+        logger.warning(f"✗ No se pudo abrir sin contraseña: {e}")
+        try:
+            pdf = pdfplumber.open(ruta_completa, password=password_pdf)
+            logger.info("✓ PDF abierto exitosamente con contraseña.")
+            abierto = True
+        except Exception as e2:
+            logger.error(f"✗ Error al abrir con contraseña: {e2}")
+            abierto = False
+
+    return pdf, abierto
+
+
+def extraer_texto_pdf(pdf):
+    """Extrae el texto completo de todas las páginas de un PDF."""
+    texto_completo = ""
+    for pagina in pdf.pages:
+        texto_pagina = pagina.extract_text()
+        if texto_pagina:
+            texto_completo += texto_pagina + "\n"
+    return texto_completo
+
+
+def detectar_tipo_tarjeta(texto):
+    """Detecta el tipo de tarjeta basándose en el texto del resumen."""
+    if "VISA" in texto[:500]:
+        return "VISA"
+    elif "MASTERCARD" in texto[:500]:
+        return "Mastercard"
+    return "Desconocida"
+
+
+def procesar_archivo_pdf(ruta_completa, nombre_archivo, password_pdf, carpeta_tmp):
+    """
+    Procesa un archivo PDF individual y retorna la lista de consumos extraídos.
+    """
+    logger.info(f"\n{'─'*80}")
+    logger.info(f"Procesando archivo: {nombre_archivo}")
+    logger.info(f"{'─'*80}")
+
+    pdf, abierto = abrir_pdf(ruta_completa, password_pdf)
+
+    if not abierto or not pdf:
+        return []
+
+    consumos = []
+    with pdf:
+        texto_completo = extraer_texto_pdf(pdf)
+
+        # Guardar texto extraído para depuración
+        texto_debug_path = os.path.join(carpeta_tmp, f"texto_extraido_{nombre_archivo}.txt")
+        with open(texto_debug_path, 'w', encoding='utf-8') as debug_file:
+            debug_file.write(texto_completo)
+        logger.debug(f"Texto extraído guardado en: {texto_debug_path}")
+
+        nombre_tarjeta = detectar_tipo_tarjeta(texto_completo)
+        numero_tarjeta, banco = extraer_datos_tarjeta(texto_completo)
+        logger.info(f"Tipo de tarjeta: {nombre_tarjeta} | Número: {numero_tarjeta or 'No detectado'} | Banco: {banco or 'No detectado'}")
+
+        consumos = procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco)
+
+        # Agregar nombre de archivo a cada consumo
+        for c in consumos:
+            c['archivo'] = nombre_archivo
+
+        logger.info(f"✓ {len(consumos)} consumos encontrados y agregados.\n")
+
+    return consumos
+
+
+# =============================================================================
+# DEDUPLICACIÓN Y VALIDACIÓN
+# =============================================================================
+
+def parse_fecha(fecha):
+    """Parsea una fecha en varios formatos posibles."""
+    for fmt in ("%d.%m.%y", "%d-%m-%y", "%d-%b-%y", "%d.%b.%y"):
+        try:
+            return datetime.strptime(fecha, fmt)
+        except Exception:
+            continue
+    return None
+
+
+def normalizar_descripcion(desc):
+    """Normaliza una descripción para comparación."""
+    return re.sub(r'[^a-z0-9]', '', desc.lower())
+
+
+def extraer_comercio(desc):
+    """Extrae la parte 'comercio' de la descripción sin el número de operación."""
+    return re.sub(r'\s+\d{5,}$', '', desc).strip()
+
+
+def eliminar_duplicados_exactos(consumos_totales):
+    """Elimina duplicados exactos basándose en todos los campos."""
+    unique_consumos = []
+    seen = set()
+
+    for row in consumos_totales:
+        key = (
+            row['fecha'],
+            row['descripcion'],
+            row['monto'],
+            row['moneda'],
+            row['tarjeta'],
+            row['numero_tarjeta'],
+            row['banco'],
+            row['archivo'],
+            row['categoria']
+        )
+        if key not in seen:
+            seen.add(key)
+            unique_consumos.append(row)
+
+    return unique_consumos
+
+
+def marcar_duplicados_mismo_archivo(unique_consumos):
+    """
+    Marca duplicados dentro del mismo archivo.
+    No marca como duplicados si tienen diferente número de operación.
+    """
+    archivo_fecha_monto = defaultdict(list)
+
+    for row in unique_consumos:
+        archivo_fecha_monto[(row['archivo'], row['fecha'], row['monto'], row['moneda'])].append(row)
+
+    for rows in archivo_fecha_monto.values():
+        if len(rows) > 1:
+            comercios = [extraer_comercio(r['descripcion']) for r in rows]
+
+            # Solo marcar como duplicados si TODAS las descripciones son idénticas
+            if len(set(comercios)) == 1 and len(set(r['descripcion'] for r in rows)) == 1:
+                for r in rows:
+                    r['duplicado'] = 'ERROR_DUPLICADO_ARCHIVO'
+                    logger.warning(f"Duplicado exacto en mismo archivo: {r['fecha']} - {r['descripcion'][:50]} - {r['moneda']} {r['monto']}")
+            else:
+                # Son consumos diferentes con el mismo monto (ej: varios viajes en metro)
+                for r in rows:
+                    r['duplicado'] = 'NO'
+                    logger.info(f"Consumo válido (mismo monto, diferente operación): {r['fecha']} - {r['descripcion'][:50]} - {r['moneda']} {r['monto']}")
+
+
+def marcar_duplicados_entre_archivos(unique_consumos):
+    """
+    Marca duplicados por similitud de descripción y monto entre archivos distintos.
+    Fechas cercanas (±5 días).
+    """
+    for i, r1 in enumerate(unique_consumos):
+        if r1.get('duplicado') == 'ERROR_DUPLICADO_ARCHIVO':
+            continue
+        r1['duplicado'] = 'NO'
+        fecha1 = parse_fecha(r1['fecha'])
+        desc1 = normalizar_descripcion(r1['descripcion'])
+
+        for j, r2 in enumerate(unique_consumos):
+            if i == j or r1['archivo'] == r2['archivo']:
+                continue
+            if r1['monto'] == r2['monto'] and r1['tarjeta'] == r2['tarjeta'] and r1['numero_tarjeta'] == r2['numero_tarjeta']:
+                desc2 = normalizar_descripcion(r2['descripcion'])
+                if 'primevideo' in desc1 and 'primevideo' in desc2:
+                    fecha2 = parse_fecha(r2['fecha'])
+                    if fecha1 and fecha2 and abs((fecha1 - fecha2).days) <= 5:
+                        r1['duplicado'] = 'SI'
+                        r2['duplicado'] = 'SI'
+                        logger.info(f"Duplicado por similitud detectado: {r1['fecha']} - {r1['descripcion'][:50]} - ${r1['monto']}")
+
+
+def procesar_duplicados(consumos_totales):
+    """
+    Procesa y marca duplicados en la lista de consumos.
+
+    Returns:
+        list: Lista de consumos únicos con campo 'duplicado' marcado
+    """
+    logger.info(f"Total de consumos extraidos antes de deduplicacion: {len(consumos_totales)}")
+
+    unique_consumos = eliminar_duplicados_exactos(consumos_totales)
+    logger.info(f"Consumos unicos despues de deduplicacion: {len(unique_consumos)}")
+
+    marcar_duplicados_mismo_archivo(unique_consumos)
+    marcar_duplicados_entre_archivos(unique_consumos)
+
+    return unique_consumos
+
+
+# =============================================================================
+# EXPORTACIÓN Y REPORTES
+# =============================================================================
+
+def guardar_csv(consumos, archivo_salida='consumos_totales.csv'):
+    """Guarda los consumos en un archivo CSV."""
+    fieldnames = ['fecha', 'descripcion', 'monto', 'moneda', 'tarjeta', 'numero_tarjeta', 'banco', 'categoria', 'duplicado']
+
+    with open(archivo_salida, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in consumos:
+            writer.writerow({k: row[k] for k in fieldnames})
+
+    return len(consumos)
+
+
+def log_resumen_categorias(consumos):
+    """Genera y loguea el resumen de consumos por categoría."""
+    logger.info(f"\n--- Resumen por Categorías ---")
+
+    categorias_count = {}
+    categorias_monto = {}
+
+    for row in consumos:
+        cat = row.get('categoria', CATEGORIA_DEFAULT)
+        categorias_count[cat] = categorias_count.get(cat, 0) + 1
+        categorias_monto[cat] = categorias_monto.get(cat, 0) + row['monto']
+
+    for cat in CATEGORIAS_ORDEN:
+        count = categorias_count.get(cat, 0)
+        monto = categorias_monto.get(cat, 0)
+        logger.info(f"  {cat}: {count} consumos | Total: ${monto:,.2f}")
+
+
+def log_resumen_final(cantidad_guardados):
+    """Loguea el resumen final del procesamiento."""
+    logger.info(f"\n✓ Proceso finalizado exitosamente")
+    logger.info(f"✓ Consumos guardados en CSV: {cantidad_guardados}")
+    logger.info(f"✓ Archivo de salida: 'consumos_totales.csv'")
+    logger.info(f"✓ Archivo de log: 'procesamiento_consumos.log'\n")
+
+
+# =============================================================================
+# FUNCIÓN PRINCIPAL
+# =============================================================================
+
 def main():
+    """Función principal que orquesta el procesamiento de PDFs de tarjetas."""
     password_pdf = '30311931'
+
+    # Validar que existe la carpeta de resúmenes
     if not os.path.exists(CARPETA_RESUMENES):
         logger.error(f"Error: La carpeta '{CARPETA_RESUMENES}' no existe.")
         return
@@ -204,152 +570,40 @@ def main():
     logger.info(f"# INICIANDO PROCESAMIENTO DE TARJETAS")
     logger.info(f"{'#'*80}\n")
 
+    # Preparar carpeta temporal para debug
     carpeta_tmp = os.path.join(CARPETA_RESUMENES, 'tmp_debug')
     os.makedirs(carpeta_tmp, exist_ok=True)
-    consumos_totales = []
 
+    # Buscar archivos PDF
     logger.info(f"Buscando archivos PDF en: {CARPETA_RESUMENES}")
     archivos_pdf = [f for f in os.listdir(CARPETA_RESUMENES) if f.lower().endswith('.pdf')]
     logger.info(f"Se encontraron {len(archivos_pdf)} archivos PDF\n")
 
+    # Procesar cada PDF y acumular consumos
+    consumos_totales = []
     for nombre_archivo in archivos_pdf:
         ruta_completa = os.path.join(CARPETA_RESUMENES, nombre_archivo)
-        logger.info(f"\n{'─'*80}")
-        logger.info(f"Procesando archivo: {nombre_archivo}")
-        logger.info(f"{'─'*80}")
+        consumos = procesar_archivo_pdf(ruta_completa, nombre_archivo, password_pdf, carpeta_tmp)
+        consumos_totales.extend(consumos)
 
-        pdf = None
-        abierto = False
-        try:
-            pdf = pdfplumber.open(ruta_completa)
-            logger.info("✓ PDF abierto sin necesidad de contraseña.")
-            abierto = True
-        except Exception as e:
-            logger.warning(f"✗ No se pudo abrir sin contraseña: {e}")
-            try:
-                pdf = pdfplumber.open(ruta_completa, password=password_pdf)
-                logger.info("✓ PDF abierto exitosamente con contraseña.")
-                abierto = True
-            except Exception as e2:
-                logger.error(f"✗ Error al abrir con contraseña: {e2}")
-                abierto = False
-
-        if abierto and pdf:
-            with pdf:
-                texto_completo = ""
-                for pagina in pdf.pages:
-                    texto_pagina = pagina.extract_text()
-                    if texto_pagina:
-                        texto_completo += texto_pagina + "\n"
-
-                # Guardar texto extraído para depuración en carpeta temporal
-                texto_debug_path = os.path.join(carpeta_tmp, f"texto_extraido_{nombre_archivo}.txt")
-                with open(texto_debug_path, 'w', encoding='utf-8') as debug_file:
-                    debug_file.write(texto_completo)
-                logger.debug(f"Texto extraído guardado en: {texto_debug_path}")
-
-                nombre_tarjeta = "Desconocida"
-                if "VISA" in texto_completo[:500]:
-                    nombre_tarjeta = "VISA"
-                elif "MASTERCARD" in texto_completo[:500]:
-                    nombre_tarjeta = "Mastercard"
-
-                numero_tarjeta, banco = extraer_datos_tarjeta(texto_completo)
-                logger.info(f"Tipo de tarjeta: {nombre_tarjeta} | Número: {numero_tarjeta or 'No detectado'} | Banco: {banco or 'No detectado'}")
-
-                consumos = procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco)
-
-                # Agregar nombre de archivo a cada consumo
-                for c in consumos:
-                    c['archivo'] = nombre_archivo
-
-                consumos_totales.extend(consumos)
-                logger.info(f"✓ {len(consumos)} consumos encontrados y agregados.\n")
-    # Guardar en CSV
+    # Procesar y guardar resultados
     if consumos_totales:
-        import csv
-        from collections import defaultdict
-        from datetime import datetime
-
         logger.info(f"\n{'#'*80}")
         logger.info(f"# PROCESANDO DUPLICADOS Y GUARDANDO RESULTADOS")
         logger.info(f"{'#'*80}\n")
 
-        logger.info(f"Total de consumos extraídos antes de deduplicación: {len(consumos_totales)}")
+        # Deduplicar y marcar duplicados
+        unique_consumos = procesar_duplicados(consumos_totales)
 
-        def parse_fecha(fecha):
-            for fmt in ("%d.%m.%y", "%d-%m-%y", "%d-%b-%y", "%d.%b.%y"):
-                try:
-                    return datetime.strptime(fecha, fmt)
-                except Exception:
-                    continue
-            return None
-        def normalizar_descripcion(desc):
-            return re.sub(r'[^a-z0-9]', '', desc.lower())
-        # Eliminar duplicados exactos
-        unique_consumos = []
-        seen = set()
-        for row in consumos_totales:
-            key = (
-                row['fecha'],
-                row['descripcion'],
-                row['monto'],
-                row['moneda'],
-                row['tarjeta'],
-                row['numero_tarjeta'],
-                row['banco'],
-                row['archivo']
-            )
-            if key not in seen:
-                seen.add(key)
-                unique_consumos.append(row)
-
-        logger.info(f"Consumos únicos después de deduplicación: {len(unique_consumos)}")
-
-        # Marcar duplicados por archivo (mismo archivo, misma fecha y monto)
-        archivo_fecha_monto = defaultdict(list)
-        for row in unique_consumos:
-            archivo_fecha_monto[(row['archivo'], row['fecha'], row['monto'])].append(row)
-        for rows in archivo_fecha_monto.values():
-            if len(rows) > 1:
-                for r in rows:
-                    r['duplicado'] = 'ERROR_DUPLICADO_ARCHIVO'
-                    logger.warning(f"Duplicado detectado en mismo archivo: {r['fecha']} - {r['descripcion'][:50]} - ${r['monto']}")
-
-        # Marcar duplicados por similitud de descripción y monto, fechas cercanas (±5 días) entre archivos distintos
-        for i, r1 in enumerate(unique_consumos):
-            if r1.get('duplicado') == 'ERROR_DUPLICADO_ARCHIVO':
-                continue
-            r1['duplicado'] = 'NO'
-            fecha1 = parse_fecha(r1['fecha'])
-            desc1 = normalizar_descripcion(r1['descripcion'])
-            for j, r2 in enumerate(unique_consumos):
-                if i == j or r1['archivo'] == r2['archivo']:
-                    continue
-                if r1['monto'] == r2['monto'] and r1['tarjeta'] == r2['tarjeta'] and r1['numero_tarjeta'] == r2['numero_tarjeta']:
-                    desc2 = normalizar_descripcion(r2['descripcion'])
-                    if 'primevideo' in desc1 and 'primevideo' in desc2:
-                        fecha2 = parse_fecha(r2['fecha'])
-                        if fecha1 and fecha2 and abs((fecha1 - fecha2).days) <= 5:
-                            r1['duplicado'] = 'SI'
-                            r2['duplicado'] = 'SI'
-                            logger.info(f"Duplicado por similitud detectado: {r1['fecha']} - {r1['descripcion'][:50]} - ${r1['monto']}")
-
-        # Guardar en CSV (sin los que tengan ERROR_DUPLICADO_ARCHIVO)
+        # Filtrar duplicados erróneos y guardar
         consumos_a_guardar = [r for r in unique_consumos if r.get('duplicado') != 'ERROR_DUPLICADO_ARCHIVO']
-        fieldnames = ['fecha', 'descripcion', 'monto', 'moneda', 'tarjeta', 'numero_tarjeta', 'banco', 'duplicado']
-        with open('consumos_totales.csv', 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in consumos_a_guardar:
-                writer.writerow({k: row[k] for k in fieldnames})
+        cantidad_guardados = guardar_csv(consumos_a_guardar)
 
-        logger.info(f"\n✓ Proceso finalizado exitosamente")
-        logger.info(f"✓ Consumos guardados en CSV: {len(consumos_a_guardar)}")
-        logger.info(f"✓ Archivo de salida: 'consumos_totales.csv'")
-        logger.info(f"✓ Archivo de log: 'procesamiento_consumos.log'\n")
+        # Generar reportes
+        log_resumen_categorias(consumos_a_guardar)
+        log_resumen_final(cantidad_guardados)
 
-        import shutil
+        # Limpiar archivos temporales
         if os.path.exists(carpeta_tmp):
             shutil.rmtree(carpeta_tmp)
             logger.debug(f"Archivos temporales de depuración eliminados: {carpeta_tmp}")

@@ -8,7 +8,7 @@ Se ha implementado un sistema completo de **logging detallado** que te permite:
    - Fecha del consumo
    - Descripción completa
    - Monto parseado final
-   - Moneda (ARS o USD)
+   - Moneda detectada automáticamente (ARS, USD o BRL)
 
 **Ejemplo:**
 ```
@@ -50,7 +50,8 @@ ERROR:Error al abrir con contraseña: ...
 ### 5. **Resumen por archivo PDF**
    - Cantidad de consumos extraídos por PDF
    - Tipo y número de tarjeta detectado
-   - Total de consumos en cada moneda
+   - Total de consumos discriminados por moneda
+   - Resumen agregado: `Total consumos: X | ARS: Y | USD: Z | BRL: W`
 
 **Ejemplo:**
 ```
@@ -59,6 +60,7 @@ INFO:✓ PDF abierto sin necesidad de contraseña.
 INFO:Tipo de tarjeta: VISA | Número: 0604905659 | Banco: No detectado
 INFO:Consumos en USD encontrados: 3
 INFO:Total de consumos extraídos para VISA: 45
+INFO:Resumen por moneda: Total consumos: 45 | ARS: 10 | USD: 30 | BRL: 5
 ```
 
 ### 6. **Detección de duplicados**
@@ -72,10 +74,29 @@ WARNING:Duplicado detectado en mismo archivo: 11.07.25 - DESCRIPCION - $2000.00
 INFO:Duplicado por similitud detectado: 15.07.25 - PRIMEVIDEO - $99.99
 ```
 
-### 7. **Resumen final del procesamiento**
+### 7. **Clasificación automática por categorías**
+   - Cada consumo se clasifica en: Utilities, Investment, Food, Household, Discretionary, Other
+   - Se muestra la categoría asignada en el log
+   - Resumen final con cantidad y montos por categoría
+
+**Ejemplo:**
+```
+INFO:Consumo [11.11.25] LACAJASEGURO 028063215  | Monto: ARS  84431.00
+INFO:  -> Categoría: Utilities
+INFO:Consumo [23.07.25] MERPAGO*NIKEARGENTINA   | Monto: ARS   8500.00
+INFO:  -> Categoría: Discretionary
+
+INFO:--- Resumen por Categorías ---
+INFO:  Utilities: 12 consumos | Total: $182,452.08
+INFO:  Food: 7 consumos | Total: $158.12
+INFO:  Discretionary: 8 consumos | Total: $237,092.35
+```
+
+### 8. **Resumen final del procesamiento**
    - Total de consumos extraídos
    - Consumos únicos después de deduplicación
    - Consumos guardados en CSV final
+   - Cantidad final por moneda reflejada en el CSV (`moneda`)
 
 **Ejemplo:**
 ```
@@ -84,6 +105,7 @@ INFO:Consumos únicos después de deduplicación: 118
 INFO:✓ Consumos guardados en CSV: 115
 INFO:✓ Archivo de salida: 'consumos_totales.csv'
 INFO:✓ Archivo de log: 'procesamiento_consumos.log'
+INFO:Resumen final: Total consumos: 115 | ARS: 50 | USD: 60 | BRL: 5
 ```
 
 ## 📁 Archivos Generados
@@ -187,5 +209,3 @@ Para guía completa y ejemplos detallados, consulta: **`GUIA_LOGGING.md`**
 ✅ **Verificación**: Puedes comparar el log con tus PDFs  
 ✅ **Historial**: Tienes registro permanente de cada ejecución  
 ✅ **Mejora continua**: Puedes ajustar PALABRAS_A_EXCLUIR basándote en los logs  
-
-

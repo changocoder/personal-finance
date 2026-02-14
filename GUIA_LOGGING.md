@@ -5,10 +5,13 @@
 Se ha agregado un sistema completo de logging al proyecto que te permite ver en detalle:
 
 1. **Cada consumo extraído** con su fecha, descripción y monto convertido
-2. **Montos parseados** mostrando la conversión de formato argentino a decimal
-3. **Advertencias y errores** que ocurran durante el procesamiento
-4. **Resumen del procesamiento** de cada PDF
-5. **Detección de duplicados** con detalles
+2. **Moneda detectada automáticamente** (ARS, USD, BRL)
+3. **Categoría asignada automáticamente** (Utilities, Investment, Food, Household, Discretionary, Other)
+4. **Montos parseados** mostrando la conversión de formato argentino a decimal
+5. **Advertencias y errores** que ocurran durante el procesamiento
+6. **Resumen del procesamiento** de cada PDF
+7. **Detección de duplicados** con detalles
+8. **Resumen por categorías** con cantidad y montos totales
 
 ## 📁 Archivos de Log
 
@@ -61,9 +64,12 @@ Tipo de tarjeta: VISA | Número: 0604905659 | Banco: No detectado
 
 ### 3. **Cada Consumo Extraído** (más importante para ti)
 ```
-Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0                | Monto: $84431.00
-Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75 USD 2            | Monto: $2.00
-Consumo [23.07.25] 582401* MERPAGO*NIKEARGENTINA Cuota 0...         | Monto: $8500.00
+Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0                | Monto: ARS  84431.00
+  -> Categoría: Utilities
+Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75 USD 2            | Monto: USD      2.00
+  -> Categoría: Utilities
+Consumo [03.07.25] K CAFÉ BRASIL                                    | Monto: BRL     35.60
+  -> Categoría: Food
 ```
 
 ### 4. **Conversión de Montos** (para verificar)
@@ -85,8 +91,10 @@ Monto inválido o cero [15.05.25] DESCRIPCION RARA -> None
 ### 7. **Resumen por Tarjeta**
 ```
 Consumos en USD encontrados: 3
-Consumo USD [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75 USD 2         | Monto: $2.00
-Total de consumos extraídos para VISA: 45
+Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75          | Monto: USD      2.00
+Consumo [02.07.25] K CAFÉ BRASIL                            | Monto: BRL     55.00
+--- Resumen de extracción para VISA ---
+Total consumos: 45 | ARS: 30 | USD: 10 | BRL: 5
 ================================================================================
 ```
 
@@ -107,6 +115,7 @@ Duplicado detectado en mismo archivo: 11.07.25 - DESCRIPCION - $2000.00
 ✓ Consumos guardados en CSV: 115
 ✓ Archivo de salida: 'consumos_totales.csv'
 ✓ Archivo de log: 'procesamiento_consumos.log'
+Resumen final por moneda: ARS=90 | USD=20 | BRL=5
 ```
 
 ## 🔍 Cómo Usar los Logs para Verificación
@@ -200,4 +209,3 @@ grep "APPLE" procesamiento_consumos.log
 ---
 
 **Nota**: El archivo de log se sobrescribe cada vez que ejecutas el script. Si quieres guardar un log anterior, renómbralo antes de ejecutar nuevamente.
-

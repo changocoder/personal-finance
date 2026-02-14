@@ -10,10 +10,13 @@ Se ha agregado un **sistema profesional y completo de logging** que te permite v
 
 ### 1. **Visibilidad Total del Proceso**
    - ✅ Cada consumo extraído con fecha, descripción y monto
+   - ✅ Moneda detectada automáticamente (ARS, USD, BRL)
+   - ✅ **Categoría asignada automáticamente** (Utilities, Investment, Food, Household, Discretionary, Other)
    - ✅ Conversión de montos paso a paso (para verificar)
    - ✅ Razones por las que consumos fueron excluidos
    - ✅ Advertencias sobre montos inválidos
    - ✅ Detalles de duplicados detectados
+   - ✅ **Resumen de consumos por categoría con totales**
 
 ### 2. **Archivo de Log Permanente**
    - Se genera automáticamente: `procesamiento_consumos.log`
@@ -34,8 +37,9 @@ Se ha agregado un **sistema profesional y completo de logging** que te permite v
 | **GUIA_LOGGING.md** | Guía completa de cómo usar los logs (👈 LEE ESTO) |
 | **CAMBIOS_LOGGING.md** | Resumen de qué se agregó y cómo funciona |
 | **EJEMPLO_OUTPUT_LOGGING.md** | Ejemplo de cómo se ve el output |
+| **CATEGORIAS.md** | Documentación del sistema de clasificación de categorías |
 | **.gitignore** | Archivo para ignorar data_cards en git |
-| **README.md** | Actualizado con información de logging |
+| **README.md** | Actualizado con información de logging y categorías |
 | **procesamiento_consumos.log** | Se genera cuando ejecutas `python main.py` |
 
 ---
@@ -73,8 +77,23 @@ grep "inválido" procesamiento_consumos.log
 
 ### Consumos Extraídos
 ```
-INFO - Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0  | Monto: $84431.00
-INFO - Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75   | Monto: $2.00
+INFO - Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0  | Monto: ARS 84431.00
+INFO -   -> Categoría: Utilities
+INFO - Consumo [01.07.25] 515535 APPLE.COM/BILL MSSVT3N75   | Monto: USD     2.00
+INFO -   -> Categoría: Utilities
+INFO - Consumo [03.07.25] K CAFÉ BRASIL                     | Monto: BRL    35.60
+INFO -   -> Categoría: Food
+```
+
+### Resumen por Categorías
+```
+INFO - --- Resumen por Categorías ---
+INFO -   Utilities: 12 consumos | Total: $182,452.08
+INFO -   Investment: 0 consumos | Total: $0.00
+INFO -   Food: 7 consumos | Total: $158.12
+INFO -   Household: 0 consumos | Total: $0.00
+INFO -   Discretionary: 8 consumos | Total: $237,092.35
+INFO -   Other: 1 consumos | Total: $622.48
 ```
 
 ### Conversión de Montos
@@ -97,6 +116,7 @@ WARNING - Monto inválido o cero [15.05.25] DESCRIPCION RARA -> None
 ```
 WARNING - Duplicado detectado en mismo archivo: 11.07.25 - DESCRIPCION - $3500.00
 INFO - Duplicado por similitud detectado: 15.07.25 - PRIMEVIDEO - $99.99
+INFO - Resumen: Total consumos: 45 | ARS: 30 | USD: 10 | BRL: 5
 ```
 
 ### Resumen
@@ -116,7 +136,7 @@ INFO - ✓ Consumos guardados en CSV: 152
 grep "11.11.25.*LACAJASEGURO" procesamiento_consumos.log
 
 # Resultado:
-# INFO - Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0  | Monto: $84431.00
+# INFO - Consumo [11.11.25] 000001* LACAJASEGURO 028063215 -0  | Monto: ARS 84431.00
 ```
 
 ### Caso 2: Ver cómo se convirtió un monto
@@ -275,4 +295,3 @@ Has recibido:
 ---
 
 *Última actualización: Diciembre 2025*
-
