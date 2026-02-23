@@ -1,5 +1,41 @@
 # 📝 Changelog - Historial de Cambios
 
+## [2026-02-23] - Refactor: Sistema de Notificaciones con Protocol
+
+### 🔧 Refactorización
+
+#### Arquitectura de Notificaciones
+- Implementado patrón **Protocol** para sistema de notificaciones extensible
+- Creado módulo `notifiers/` con arquitectura limpia:
+  - `base.py` - Define el Protocol `Notifier`
+  - `email.py` - `EmailNotifier` (Resend + SMTP)
+  - `factory.py` - Factory para crear notificadores según `.env`
+- Eliminado archivo `email_sender.py` (reemplazado por `notifiers/email.py`)
+
+### 📁 Archivos Creados
+- `notifiers/__init__.py` - Exports del módulo
+- `notifiers/base.py` - Protocol Notifier
+- `notifiers/email.py` - EmailNotifier
+- `notifiers/factory.py` - Factory pattern
+- `NOTIFICACIONES.md` - Documentación de la arquitectura
+
+### 📁 Archivos Modificados
+- `main.py` - Usa `send_notification()` del nuevo módulo
+- `.env.example` - Variables `NOTIFICATION_ENABLED` y `NOTIFICATION_TYPE`
+- `README.md` - Actualizada estructura del proyecto
+- `INDICE.md` - Enlace a NOTIFICACIONES.md
+
+### 📁 Archivos Eliminados
+- `email_sender.py` - Reemplazado por `notifiers/email.py`
+
+### ✨ Ventajas de la Nueva Arquitectura
+- **Extensible**: Fácil agregar Telegram, Slack, etc.
+- **Desacoplado**: Cada notificador es independiente
+- **Duck Typing**: No requiere herencia explícita
+- **Testeable**: Se pueden crear mocks fácilmente
+
+---
+
 ## [2026-02-23] - Feature: Envío de Reportes por Email
 
 ### ✨ Nuevas Funcionalidades

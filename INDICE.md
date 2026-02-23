@@ -91,6 +91,14 @@
     - Configuración de Gmail y otros proveedores
     - Flag para habilitar/deshabilitar la funcionalidad
 
+### 🔔 Sistema de Notificaciones
+
+12. **[NOTIFICACIONES.md](NOTIFICACIONES.md)**
+    - Arquitectura del sistema de notificaciones
+    - Patrón Protocol (Duck Typing)
+    - Cómo agregar nuevos notificadores
+    - Factory pattern para crear notificadores
+
 ---
 
 ## 📖 Guía de Lectura Recomendada

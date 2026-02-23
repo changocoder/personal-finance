@@ -47,7 +47,11 @@ pip install -r requirements.txt
 personal-finance-app/
 ├── main.py                    # Script principal
 ├── constants.py               # Constantes y configuración (categorías, palabras clave)
-├── email_sender.py            # Módulo de envío de emails
+├── notifiers/                 # Módulo de notificaciones (Protocol pattern)
+│   ├── __init__.py
+│   ├── base.py               # Protocol Notifier (interfaz)
+│   ├── email.py              # EmailNotifier (Resend + SMTP)
+│   └── factory.py            # Factory para crear notificadores
 ├── requirements.txt           # Dependencias del proyecto
 ├── .env.example               # Plantilla de variables de entorno
 ├── data_cards/               # Carpeta para los PDFs (ignorada por git)
@@ -170,18 +174,19 @@ cp .env.example .env
 
 ### 2. Configurar variables de entorno
 ```env
-# Habilitar envío (1 = habilitado, 0 = deshabilitado)
-EMAIL_ENABLED=1
+# Habilitar notificaciones
+NOTIFICATION_ENABLED=1
+NOTIFICATION_TYPE=email
 
-# Configuración SMTP
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-EMAIL_SENDER=tu_email@gmail.com
-EMAIL_PASSWORD=tu_app_password
-EMAIL_RECIPIENT=destinatario@email.com
+# Configuración de email (Resend recomendado)
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_xxxxxxxxxx
+EMAIL_RECIPIENT=tu@email.com
 ```
 
-Para más detalles, consulta [EMAIL.md](EMAIL.md).
+Para más detalles, consulta:
+- [EMAIL.md](EMAIL.md) - Configuración de email
+- [NOTIFICACIONES.md](NOTIFICACIONES.md) - Arquitectura del sistema de notificaciones
 
 ## 📝 Logs
 

@@ -19,7 +19,7 @@ from constants import (
     CATEGORIA_DEFAULT,
     CATEGORIAS_ORDEN
 )
-from email_sender import enviar_reporte_email
+from notifiers import send_notification
 
 # --- CARGAR VARIABLES DE ENTORNO ---
 load_dotenv()
@@ -720,8 +720,8 @@ def main():
         log_resumen_categorias(consumos_a_guardar)
         log_resumen_final(cantidad_guardados, cotizacion_dolar)
 
-        # Enviar reporte por email (si está habilitado)
-        enviar_reporte_email(consumos_a_guardar, cotizacion_dolar)
+        # Enviar notificación (si está habilitado)
+        send_notification(consumos_a_guardar, cotizacion_dolar)
 
         # Limpiar archivos temporales
         if os.path.exists(carpeta_tmp):
