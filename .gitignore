@@ -2,6 +2,9 @@
 # Personal Finance App - .gitignore
 # =============================================================================
 
+# --- Variables de entorno (contiene credenciales) ---
+.env
+
 # --- Carpeta de datos personales (PDFs de tarjetas) ---
 data_cards/*
 !data_cards/.gitkeep

@@ -1,5 +1,43 @@
 # 📝 Changelog - Historial de Cambios
 
+## [2026-02-23] - Feature: Envío de Reportes por Email
+
+### ✨ Nuevas Funcionalidades
+
+#### Envío de Reportes por Email
+- Nueva funcionalidad para enviar reportes automáticamente por email
+- Flag binario `EMAIL_ENABLED` para habilitar/deshabilitar (1/0)
+- Soporte para configuración via archivo `.env`
+- Email HTML con resumen de consumos por moneda y categoría
+- Archivo CSV adjunto con el detalle completo
+
+### 📁 Archivos Creados
+- `email_sender.py` - Módulo para envío de emails
+- `.env.example` - Plantilla de configuración de variables de entorno
+- `EMAIL.md` - Documentación de la funcionalidad de email
+
+### 📁 Archivos Modificados
+- `main.py` - Integración con módulo de email y carga de dotenv
+- `requirements.txt` - Agregada dependencia `python-dotenv`
+- `.gitignore` - Agregado `.env` para proteger credenciales
+- `INDICE.md` - Enlace a nueva documentación
+- `CHANGELOG.md` - Registro de cambios
+
+### 🔧 Configuración
+
+Variables de entorno disponibles:
+```env
+EMAIL_ENABLED=0|1
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EMAIL_SENDER=email@ejemplo.com
+EMAIL_PASSWORD=app_password
+EMAIL_RECIPIENT=destinatario@ejemplo.com
+EMAIL_SUBJECT=Asunto personalizado
+```
+
+---
+
 ## [2026-02-14] - Sesión de Desarrollo
 
 ### ✨ Nuevas Funcionalidades

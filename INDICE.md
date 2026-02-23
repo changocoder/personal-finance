@@ -83,6 +83,14 @@
     - Correcciones realizadas
     - Refactorizaciones del código
 
+### 📧 Envío de Reportes por Email
+
+11. **[EMAIL.md](EMAIL.md)**
+    - Configuración de envío de email
+    - Variables de entorno requeridas
+    - Configuración de Gmail y otros proveedores
+    - Flag para habilitar/deshabilitar la funcionalidad
+
 ---
 
 ## 📖 Guía de Lectura Recomendada

@@ -8,6 +8,7 @@ import urllib.request
 import json
 from collections import defaultdict
 from datetime import datetime
+from dotenv import load_dotenv
 
 from constants import (
     CARPETA_RESUMENES,
@@ -18,6 +19,10 @@ from constants import (
     CATEGORIA_DEFAULT,
     CATEGORIAS_ORDEN
 )
+from email_sender import enviar_reporte_email
+
+# --- CARGAR VARIABLES DE ENTORNO ---
+load_dotenv()
 
 # --- CONFIGURACIÓN DE LOGGING ---
 logging.basicConfig(
@@ -714,6 +719,9 @@ def main():
         # Generar reportes
         log_resumen_categorias(consumos_a_guardar)
         log_resumen_final(cantidad_guardados, cotizacion_dolar)
+
+        # Enviar reporte por email (si está habilitado)
+        enviar_reporte_email(consumos_a_guardar, cotizacion_dolar)
 
         # Limpiar archivos temporales
         if os.path.exists(carpeta_tmp):

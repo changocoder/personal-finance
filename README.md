@@ -11,6 +11,7 @@ Esta herramienta permite:
 - **Clasificar automáticamente los consumos en categorías** (Utilities, Investment, Food, Household, Discretionary, Other)
 - Detectar y marcar posibles duplicados
 - Exportar los resultados a un archivo CSV para análisis
+- **Enviar reportes automáticos por email** (configurable)
 - Registrar logs detallados con totales por moneda, categoría y trazabilidad de conversiones
 
 ## 🚀 Instalación
@@ -46,7 +47,9 @@ pip install -r requirements.txt
 personal-finance-app/
 ├── main.py                    # Script principal
 ├── constants.py               # Constantes y configuración (categorías, palabras clave)
+├── email_sender.py            # Módulo de envío de emails
 ├── requirements.txt           # Dependencias del proyecto
+├── .env.example               # Plantilla de variables de entorno
 ├── data_cards/               # Carpeta para los PDFs (ignorada por git)
 │   └── .gitkeep
 ├── consumos_totales.csv      # Archivo de salida con los consumos
@@ -155,6 +158,30 @@ La aplicación detecta automáticamente las siguientes monedas:
 - **ARS**: Pesos argentinos (por defecto)
 - **USD**: Dólares estadounidenses
 - **BRL**: Reales brasileños
+
+## 📧 Envío de Reportes por Email
+
+La aplicación puede enviar automáticamente el reporte por email. Para configurarlo:
+
+### 1. Crear archivo de configuración
+```bash
+cp .env.example .env
+```
+
+### 2. Configurar variables de entorno
+```env
+# Habilitar envío (1 = habilitado, 0 = deshabilitado)
+EMAIL_ENABLED=1
+
+# Configuración SMTP
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EMAIL_SENDER=tu_email@gmail.com
+EMAIL_PASSWORD=tu_app_password
+EMAIL_RECIPIENT=destinatario@email.com
+```
+
+Para más detalles, consulta [EMAIL.md](EMAIL.md).
 
 ## 📝 Logs
 
