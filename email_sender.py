@@ -1,5 +1,6 @@
 # email_sender.py
 # Módulo para envío de reportes por email
+# Soporta: Resend (recomendado) y SMTP tradicional
 
 import os
 import smtplib
@@ -11,6 +12,13 @@ from email import encoders
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Intentar importar resend (opcional)
+try:
+    import resend
+    RESEND_AVAILABLE = True
+except ImportError:
+    RESEND_AVAILABLE = False
 
 
 def cargar_configuracion_email():
@@ -26,22 +34,36 @@ def cargar_configuracion_email():
         logger.info("📧 Envío de email deshabilitado (EMAIL_ENABLED != 1)")
         return None
 
-    # Cargar configuración
+    # Detectar proveedor de email
+    email_provider = os.getenv('EMAIL_PROVIDER', 'smtp').lower()
+
     config = {
-        'smtp_server': os.getenv('SMTP_SERVER', 'smtp.gmail.com'),
-        'smtp_port': int(os.getenv('SMTP_PORT', '587')),
-        'sender': os.getenv('EMAIL_SENDER'),
-        'password': os.getenv('EMAIL_PASSWORD'),
+        'provider': email_provider,
         'recipient': os.getenv('EMAIL_RECIPIENT'),
         'subject': os.getenv('EMAIL_SUBJECT', 'Reporte de Consumos - Personal Finance App')
     }
 
-    # Validar campos requeridos
-    campos_requeridos = ['sender', 'password', 'recipient']
-    campos_faltantes = [c for c in campos_requeridos if not config.get(c)]
+    if email_provider == 'resend':
+        # Configuración para Resend
+        config['api_key'] = os.getenv('RESEND_API_KEY')
+        config['sender'] = os.getenv('EMAIL_SENDER', 'onboarding@resend.dev')
 
-    if campos_faltantes:
-        logger.error(f"❌ Configuración de email incompleta. Faltan: {', '.join(campos_faltantes)}")
+        if not config['api_key']:
+            logger.error("❌ Falta RESEND_API_KEY para usar Resend")
+            return None
+    else:
+        # Configuración para SMTP
+        config['smtp_server'] = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
+        config['smtp_port'] = int(os.getenv('SMTP_PORT', '587'))
+        config['sender'] = os.getenv('EMAIL_SENDER')
+        config['password'] = os.getenv('EMAIL_PASSWORD')
+
+        if not config['sender'] or not config['password']:
+            logger.error("❌ Configuración SMTP incompleta. Faltan: EMAIL_SENDER o EMAIL_PASSWORD")
+            return None
+
+    if not config['recipient']:
+        logger.error("❌ Falta EMAIL_RECIPIENT")
         return None
 
     return config
@@ -150,9 +172,78 @@ def generar_cuerpo_email(consumos, cotizacion_dolar):
     return html
 
 
+def enviar_con_resend(config, cuerpo_html, archivo_csv):
+    """Envía email usando Resend API."""
+    if not RESEND_AVAILABLE:
+        logger.error("❌ Librería 'resend' no instalada. Ejecuta: pip install resend")
+        return False
+
+    resend.api_key = config['api_key']
+
+    # Preparar adjunto
+    attachments = []
+    if os.path.exists(archivo_csv):
+        with open(archivo_csv, 'rb') as f:
+            filename = f"consumos_{datetime.now().strftime('%Y%m%d')}.csv"
+            attachments.append({
+                "filename": filename,
+                "content": list(f.read())
+            })
+            logger.info(f"📎 Archivo adjunto: {filename}")
+
+    # Enviar email
+    logger.info(f"📤 Enviando via Resend API...")
+    params = {
+        "from": config['sender'],
+        "to": [config['recipient']],
+        "subject": f"{config['subject']} - {datetime.now().strftime('%d/%m/%Y')}",
+        "html": cuerpo_html
+    }
+
+    if attachments:
+        params["attachments"] = attachments
+
+    response = resend.Emails.send(params)
+    logger.info(f"✅ Email enviado exitosamente via Resend (ID: {response['id']})")
+    return True
+
+
+def enviar_con_smtp(config, cuerpo_html, archivo_csv):
+    """Envía email usando SMTP tradicional."""
+    msg = MIMEMultipart()
+    msg['From'] = config['sender']
+    msg['To'] = config['recipient']
+    msg['Subject'] = f"{config['subject']} - {datetime.now().strftime('%d/%m/%Y')}"
+
+    # Agregar cuerpo del email
+    msg.attach(MIMEText(cuerpo_html, 'html'))
+
+    # Adjuntar archivo CSV
+    if os.path.exists(archivo_csv):
+        with open(archivo_csv, 'rb') as attachment:
+            part = MIMEBase('application', 'octet-stream')
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            filename = f"consumos_{datetime.now().strftime('%Y%m%d')}.csv"
+            part.add_header('Content-Disposition', f'attachment; filename={filename}')
+            msg.attach(part)
+            logger.info(f"📎 Archivo adjunto: {filename}")
+
+    # Enviar email
+    logger.info(f"📤 Conectando a {config['smtp_server']}:{config['smtp_port']}...")
+    with smtplib.SMTP(config['smtp_server'], config['smtp_port']) as server:
+        server.starttls()
+        server.login(config['sender'], config['password'])
+        server.send_message(msg)
+
+    logger.info(f"✅ Email enviado exitosamente via SMTP")
+    return True
+
+
 def enviar_reporte_email(consumos, cotizacion_dolar, archivo_csv='consumos_totales.csv'):
     """
     Envía el reporte de consumos por email.
+    Soporta Resend (recomendado) y SMTP tradicional.
 
     Args:
         consumos (list): Lista de consumos procesados
@@ -162,47 +253,19 @@ def enviar_reporte_email(consumos, cotizacion_dolar, archivo_csv='consumos_total
     Returns:
         bool: True si se envió correctamente, False en caso contrario
     """
-    # Cargar configuración
     config = cargar_configuracion_email()
     if not config:
         return False
 
-    logger.info(f"📧 Preparando envío de email a {config['recipient']}...")
+    logger.info(f"📧 Preparando envío de email a {config['recipient']} via {config['provider'].upper()}...")
 
     try:
-        # Crear mensaje
-        msg = MIMEMultipart()
-        msg['From'] = config['sender']
-        msg['To'] = config['recipient']
-        msg['Subject'] = f"{config['subject']} - {datetime.now().strftime('%d/%m/%Y')}"
+        cuerpo_html = generar_cuerpo_email(consumos, cotizacion_dolar)
 
-        # Agregar cuerpo del email
-        cuerpo = generar_cuerpo_email(consumos, cotizacion_dolar)
-        msg.attach(MIMEText(cuerpo, 'html'))
-
-        # Adjuntar archivo CSV
-        if os.path.exists(archivo_csv):
-            with open(archivo_csv, 'rb') as attachment:
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(attachment.read())
-                encoders.encode_base64(part)
-
-                filename = f"consumos_{datetime.now().strftime('%Y%m%d')}.csv"
-                part.add_header('Content-Disposition', f'attachment; filename={filename}')
-                msg.attach(part)
-                logger.info(f"📎 Archivo adjunto: {filename}")
+        if config['provider'] == 'resend':
+            return enviar_con_resend(config, cuerpo_html, archivo_csv)
         else:
-            logger.warning(f"⚠️ Archivo CSV no encontrado: {archivo_csv}")
-
-        # Enviar email
-        logger.info(f"📤 Conectando a {config['smtp_server']}:{config['smtp_port']}...")
-        with smtplib.SMTP(config['smtp_server'], config['smtp_port']) as server:
-            server.starttls()
-            server.login(config['sender'], config['password'])
-            server.send_message(msg)
-
-        logger.info(f"✅ Email enviado exitosamente a {config['recipient']}")
-        return True
+            return enviar_con_smtp(config, cuerpo_html, archivo_csv)
 
     except smtplib.SMTPAuthenticationError:
         logger.error("❌ Error de autenticación SMTP. Verifica EMAIL_SENDER y EMAIL_PASSWORD")
