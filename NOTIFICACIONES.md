@@ -73,3 +73,33 @@ TELEGRAM_CHAT_ID=xxx
 2. **Desacoplado**: Cada notificador es independiente
 3. **Testeable**: Se pueden crear mocks fácilmente
 4. **Duck Typing**: No requiere herencia explícita
+## Logs del Sistema de Notificaciones
+El sistema genera logs detallados en cada operación:
+### Notificaciones deshabilitadas
+```
+INFO - 🔕 Notificaciones deshabilitadas (NOTIFICATION_ENABLED != 1)
+```
+### Notificaciones habilitadas (Email)
+```
+INFO - 🔔 Notificaciones habilitadas - Tipo: EMAIL
+INFO - 📊 Enviando reporte con 28 consumos...
+INFO - 📧 Iniciando envío de email...
+INFO - 📧 Preparando email para destinatario@email.com via RESEND...
+INFO - 📎 Archivo adjunto: consumos_20260224.csv (1234 bytes)
+INFO - 📤 Enviando via Resend API...
+INFO - ✅ Email enviado exitosamente via Resend
+INFO -    ID: abc123-def456
+INFO - ✅ Notificación enviada exitosamente
+```
+### Logs de Debug
+Para ver logs más detallados, cambiar el nivel en main.py:
+```python
+logging.basicConfig(level=logging.DEBUG, ...)
+```
+### Errores comunes
+```
+ERROR - ❌ Falta EMAIL_RECIPIENT
+ERROR - ❌ Falta RESEND_API_KEY para usar Resend
+ERROR - ❌ Error de autenticación SMTP
+ERROR - ❌ Tipo de notificador desconocido: 'xyz'
+```
