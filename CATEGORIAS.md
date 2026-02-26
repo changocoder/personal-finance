@@ -133,3 +133,67 @@ Consumo [23.01.26] NETFLIX.COM 58139969884526236 | Monto: ARS   25398.00
   Other: 5 consumos | Total: $12,345.00
 ```
 
+## Consulta de Categorías via API
+
+La API REST permite consultar consumos filtrados por categoría:
+
+### Endpoints Disponibles
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `GET` | `/consumos/categorias` | Resumen de todas las categorías |
+| `GET` | `/consumos/categorias/{categoria}` | Consumos de una categoría específica |
+| `GET` | `/consumos/?categoria=Food` | Filtrar consumos por categoría |
+
+### Resumen de Todas las Categorías
+```bash
+curl "http://localhost:8000/consumos/categorias"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Resumen de 6 categorías",
+  "total_consumos": 68,
+  "monto_total_general": 581578.00,
+  "cotizacion_dolar": 1050.00,
+  "fecha_consulta": "2026-02-26T10:30:00",
+  "categorias": [
+    {"categoria": "Utilities", "cantidad": 15, "monto_total": 150234.00, "porcentaje": 25.83},
+    {"categoria": "Food", "cantidad": 25, "monto_total": 89432.00, "porcentaje": 15.38}
+  ]
+}
+```
+
+### Consumos por Categoría Específica
+```bash
+# Consumos de Food
+curl "http://localhost:8000/consumos/categorias/Food"
+
+# Consumos de Food solo en USD
+curl "http://localhost:8000/consumos/categorias/Food?moneda=USD"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Se encontraron 25 consumos en 'Food'",
+  "categoria": "Food",
+  "total_consumos": 25,
+  "monto_total": 89432.00,
+  "monto_total_pesificado": 89432.00,
+  "porcentaje_del_total": 15.38,
+  "consumos": [...]
+}
+```
+
+### Categorías Disponibles para Consulta
+- `Utilities` - Servicios y suscripciones
+- `Investment` - Inversiones
+- `Food` - Alimentación
+- `Household` - Hogar
+- `Discretionary` - Gastos discrecionales
+- `Other` - Otros
+
