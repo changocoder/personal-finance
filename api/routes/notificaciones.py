@@ -4,6 +4,7 @@ Endpoints para envío de notificaciones.
 """
 
 from fastapi import APIRouter, HTTPException
+import errno
 import logging
 import os
 import json
@@ -121,16 +122,62 @@ def _cargar_preferencias() -> dict:
     }
 
 
-def _guardar_preferencias(preferencias: dict) -> bool:
-    """Guarda las preferencias de notificación en archivo."""
+def _guardar_preferencias(preferencias: dict) -> None:
+    """Guarda las preferencias de notificación en archivo.
+
+    Raises:
+        PermissionError: Si no hay permisos de escritura sobre el archivo.
+        OSError: Si el disco está lleno u otro error de sistema de archivos ocurre.
+        TypeError: Si las preferencias contienen datos no serializables a JSON.
+    """
     try:
         with open(PREFERENCIAS_FILE, 'w') as f:
             json.dump(preferencias, f, indent=2)
         logger.info("Preferencias de notificación guardadas")
-        return True
-    except Exception as e:
-        logger.error(f"Error guardando preferencias: {e}")
-        return False
+    except PermissionError as e:
+        logger.error(f"Error de permisos al guardar preferencias en '{PREFERENCIAS_FILE}': {e}")
+        raise
+    except OSError as e:
+        if e.errno == errno.ENOSPC:
+            logger.error(f"Disco lleno al guardar preferencias en '{PREFERENCIAS_FILE}': {e}")
+        else:
+            logger.error(f"Error de sistema de archivos al guardar preferencias en '{PREFERENCIAS_FILE}': {e}")
+        raise
+    except TypeError as e:
+        logger.error(f"Las preferencias no son serializables a JSON: {e}")
+        raise TypeError(f"Las preferencias contienen datos no serializables a JSON: {e}") from e
+
+
+def _guardar_preferencias_o_error_http(preferencias: dict) -> None:
+    """Intenta guardar las preferencias y convierte errores de archivo en HTTPException.
+
+    Raises:
+        HTTPException: Con un mensaje descriptivo sobre el motivo del fallo.
+    """
+    try:
+        _guardar_preferencias(preferencias)
+    except PermissionError:
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pueden guardar las preferencias: sin permisos de escritura en el archivo '{PREFERENCIAS_FILE}'."
+        )
+    except OSError as os_err:
+        if os_err.errno == errno.ENOSPC:
+            raise HTTPException(
+                status_code=500,
+                detail="No se pueden guardar las preferencias: disco lleno."
+            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pueden guardar las preferencias: error de sistema de archivos ({os_err.strerror})."
+        )
+    except ValueError as val_err:
+        raise HTTPException(status_code=500, detail=str(val_err))
+    except TypeError:
+        raise HTTPException(
+            status_code=500,
+            detail="No se pueden guardar las preferencias: los datos de configuración no son válidos."
+        )
 
 
 @router.get(
@@ -201,8 +248,7 @@ async def actualizar_preferencias(request: PreferenciasNotificacionRequest):
             'incluir_detalle': request.incluir_detalle
         }
 
-        if not _guardar_preferencias(preferencias):
-            raise HTTPException(status_code=500, detail="Error guardando preferencias")
+        _guardar_preferencias_o_error_http(preferencias)
 
         logger.info(f"Preferencias actualizadas: habilitado={request.habilitado}, tipo={request.tipo}")
 
@@ -236,8 +282,7 @@ async def suscribir_notificaciones():
         preferencias = _cargar_preferencias()
         preferencias['habilitado'] = True
 
-        if not _guardar_preferencias(preferencias):
-            raise HTTPException(status_code=500, detail="Error guardando preferencias")
+        _guardar_preferencias_o_error_http(preferencias)
 
         return PreferenciasNotificacionResponse(
             success=True,
@@ -269,8 +314,7 @@ async def desuscribir_notificaciones():
         preferencias = _cargar_preferencias()
         preferencias['habilitado'] = False
 
-        if not _guardar_preferencias(preferencias):
-            raise HTTPException(status_code=500, detail="Error guardando preferencias")
+        _guardar_preferencias_o_error_http(preferencias)
 
         return PreferenciasNotificacionResponse(
             success=True,
@@ -282,5 +326,3 @@ async def desuscribir_notificaciones():
     except Exception as e:
         logger.error(f"Error desuscribiendo de notificaciones: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
