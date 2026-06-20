@@ -19,14 +19,24 @@ from api.routes import (
 )
 
 # Configuración de logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('api.log'),
-        logging.StreamHandler()
-    ]
-)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+root_logger.addHandler(stream_handler)
+
+try:
+    file_handler = logging.FileHandler('api.log')
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+except OSError:
+    root_logger.warning(
+        "No se pudo crear el archivo de log 'api.log'. "
+        "Continuando con logging en consola solamente.",
+        exc_info=True,
+    )
 logger = logging.getLogger(__name__)
 
 # Versión de la API
