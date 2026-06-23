@@ -12,6 +12,8 @@ data_cards/*
 # --- Archivos de salida generados ---
 consumos_totales.csv
 procesamiento_consumos.log
+preferencias_notificaciones.json
+api.log
 *.txt
 
 # --- Python ---

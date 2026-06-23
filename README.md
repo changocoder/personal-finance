@@ -45,8 +45,20 @@ pip install -r requirements.txt
 
 ```
 personal-finance-app/
-├── main.py                    # Script principal
+├── main.py                    # Script principal (CLI)
 ├── constants.py               # Constantes y configuración (categorías, palabras clave)
+├── api/                       # API REST (FastAPI)
+│   ├── __init__.py
+│   ├── app.py                # Aplicación principal FastAPI
+│   ├── schemas.py            # Esquemas Pydantic (request/response)
+│   ├── services.py           # Servicios de negocio
+│   └── routes/               # Endpoints organizados por recurso
+│       ├── archivos.py       # CRUD de archivos PDF
+│       ├── reportes.py       # Generación de reportes
+│       ├── consumos.py       # Consulta de consumos
+│       ├── cotizacion.py     # Cotización del dólar
+│       ├── notificaciones.py # Envío de emails
+│       └── categorias.py     # Categorías de gastos
 ├── notifiers/                 # Módulo de notificaciones (Protocol pattern)
 │   ├── __init__.py
 │   ├── base.py               # Protocol Notifier (interfaz)
@@ -58,6 +70,7 @@ personal-finance-app/
 │   └── .gitkeep
 ├── consumos_totales.csv      # Archivo de salida con los consumos
 ├── procesamiento_consumos.log # Log detallado del procesamiento
+├── API.md                    # Documentación de la API REST
 └── README.md
 ```
 
@@ -77,6 +90,51 @@ python main.py
 
 - **consumos_totales.csv**: Archivo con todos los consumos extraídos (incluye columna de moneda)
 - **procesamiento_consumos.log**: Log detallado del proceso (incluye resumen ARS/USD/BRL)
+
+## 🌐 API REST
+
+La aplicación incluye una **API REST** desarrollada con FastAPI para que bots y aplicaciones externas puedan consumir las funcionalidades.
+
+### Iniciar el servidor
+
+```bash
+uvicorn api.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Endpoints principales
+
+| Recurso | Método | Endpoint | Descripción |
+|---------|--------|----------|-------------|
+| **Reportes** | `POST` | `/reportes/generar` | Procesa PDFs y genera reporte |
+| **Archivos** | `POST` | `/archivos/upload` | Carga un resumen PDF |
+| **Archivos** | `GET` | `/archivos/` | Lista PDFs cargados |
+| **Consumos** | `GET` | `/consumos/` | Obtiene consumos (con filtros) |
+| **Cotización** | `GET` | `/cotizacion/dolar` | Obtiene cotización del dólar |
+| **Notificaciones** | `POST` | `/notificaciones/enviar` | Envía reporte por email |
+| **Categorías** | `GET` | `/categorias/` | Lista categorías disponibles |
+
+### Documentación interactiva
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### Ejemplo de uso con curl
+
+```bash
+# Cargar un resumen PDF
+curl -X POST "http://localhost:8000/archivos/upload" -F "archivo=@visa.pdf"
+
+# Generar reporte
+curl -X POST "http://localhost:8000/reportes/generar"
+
+# Obtener consumos en USD
+curl "http://localhost:8000/consumos/?moneda=USD"
+
+# Enviar por email
+curl -X POST "http://localhost:8000/notificaciones/enviar"
+```
+
+Para documentación completa de la API, consulta [API.md](API.md).
 
 ## 📊 Formato del archivo CSV de salida
 

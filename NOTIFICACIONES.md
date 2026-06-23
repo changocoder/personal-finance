@@ -103,3 +103,62 @@ ERROR - ❌ Falta RESEND_API_KEY para usar Resend
 ERROR - ❌ Error de autenticación SMTP
 ERROR - ❌ Tipo de notificador desconocido: 'xyz'
 ```
+
+## Gestión de Preferencias via API
+
+La API REST permite gestionar las preferencias de notificación de forma dinámica:
+
+### Endpoints Disponibles
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `GET` | `/notificaciones/preferencias` | Obtiene preferencias actuales |
+| `PUT` | `/notificaciones/preferencias` | Actualiza preferencias |
+| `POST` | `/notificaciones/suscribir` | Activa notificaciones |
+| `POST` | `/notificaciones/desuscribir` | Desactiva notificaciones |
+
+### Preferencias Disponibles
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `habilitado` | boolean | Habilitar/deshabilitar notificaciones |
+| `tipo` | string | Tipo de notificación (email) |
+| `email_destino` | string | Email de destino |
+| `envio_automatico` | boolean | Enviar automáticamente después de generar reporte |
+| `incluir_resumen` | boolean | Incluir resumen por categorías |
+| `incluir_detalle` | boolean | Incluir detalle de consumos |
+
+### Ejemplo de Actualización
+```bash
+curl -X PUT "http://localhost:8000/notificaciones/preferencias" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "habilitado": true,
+    "tipo": "email",
+    "envio_automatico": true,
+    "incluir_resumen": true,
+    "incluir_detalle": false
+  }'
+```
+
+### Persistencia de Preferencias
+
+Las preferencias se guardan en el archivo `preferencias_notificaciones.json` y persisten entre reinicios de la aplicación. Este archivo está excluido del control de versiones (`.gitignore`).
+
+### Flujo de Suscripción
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API
+    participant Config
+    
+    User->>API: POST /notificaciones/suscribir
+    API->>Config: Cargar preferencias
+    Config-->>API: preferencias actuales
+    API->>Config: Guardar (habilitado=true)
+    API-->>User: {"success": true, "message": "Suscrito"}
+    
+    Note over User,Config: Próximo reporte será notificado
+```
+

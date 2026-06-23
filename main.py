@@ -439,11 +439,133 @@ def extraer_texto_pdf(pdf):
 
 def detectar_tipo_tarjeta(texto):
     """Detecta el tipo de tarjeta basándose en el texto del resumen."""
-    if "VISA" in texto[:500]:
+    if "AMERICAN EXPRESS" in texto[:500]:
+        return "AMEX"
+    elif "VISA" in texto[:500]:
         return "VISA"
     elif "MASTERCARD" in texto[:500]:
         return "Mastercard"
     return "Desconocida"
+
+
+def detectar_emisor(texto):
+    """Detecta el banco emisor de la tarjeta para seleccionar el parser correcto."""
+    if 'Santander' in texto[:1000] or 'SANTANDER' in texto[:1000]:
+        return 'SANTANDER'
+    return 'PATAGONIA'
+
+
+# =============================================================================
+# PARSER ESPECÍFICO PARA SANTANDER RÍO
+# =============================================================================
+
+MESES_ES = {
+    'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+    'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+    'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+}
+
+
+def extraer_anio_cierre(texto):
+    """Extrae el año (2 dígitos) de la fecha de cierre del resumen Santander."""
+    match = re.search(r'CIERRE\s+\d{1,2}\s+\w+\s+(\d{2})', texto)
+    if match:
+        return match.group(1)
+    return str(datetime.now().year % 100).zfill(2)
+
+
+def procesar_texto_santander(texto_completo, nombre_tarjeta, numero_tarjeta, banco):
+    """
+    Parser para resúmenes del banco Santander Río.
+
+    Formato de transacciones Santander:
+    - Fila con fecha: "DD MesNombre ComprobDia Referencia [*|K] Descripcion Monto [USDMonto]"
+    - Filas siguientes (mismo grupo): "ComprobDia Referencia [*|K] Descripcion Monto [USDMonto]"
+    """
+    consumos = []
+    consumos_vistos = set()
+    anio = extraer_anio_cierre(texto_completo)
+    current_fecha_str = None
+
+    MESES_PATRON = (
+        'enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+        'septiembre|octubre|noviembre|diciembre'
+    )
+
+    # Línea con fecha completa: "26 Abril 09 690325 [*|K] Descripcion Monto [USDMonto]"
+    patron_full = re.compile(
+        r'^(\d{1,2})\s+(' + MESES_PATRON + r')\s+\d{1,2}\s+(\d{4,7})\s+[*K]?\s*'
+        r'(.+?)\s+([\d.]+,\d{2})(?:\s+([\d.]+,\d{2}))?',
+        re.IGNORECASE
+    )
+
+    # Línea sin fecha (solo comprobante + referencia): "23 134493 [*|K] Descripcion Monto [USDMonto]"
+    patron_partial = re.compile(
+        r'^\d{2}\s+(\d{5,6})\s+[*K]?\s*(.+?)\s+([\d.]+,\d{2})(?:\s+([\d.]+,\d{2}))?',
+        re.IGNORECASE
+    )
+
+    logger.info(f"\n{'='*80}")
+    logger.info(f"Procesando {nombre_tarjeta} (formato Santander Río) - Año cierre: 20{anio}")
+    logger.info(f"{'='*80}")
+
+    for line in texto_completo.split('\n'):
+        line = line.strip()
+
+        m = patron_full.match(line)
+        if m:
+            dia = m.group(1).zfill(2)
+            mes_num = MESES_ES.get(m.group(2).lower(), '01')
+            current_fecha_str = f"{dia}.{mes_num}.{anio}"
+            ref, desc_raw, monto_str, usd_str = m.group(3), m.group(4), m.group(5), m.group(6)
+        else:
+            m = patron_partial.match(line)
+            if m and current_fecha_str:
+                ref, desc_raw, monto_str, usd_str = m.group(1), m.group(2), m.group(3), m.group(4)
+            else:
+                continue
+
+        desc = re.sub(r'\s+', ' ', desc_raw).strip()
+
+        if any(p in desc.upper() for p in PALABRAS_A_EXCLUIR):
+            logger.debug(f"Línea excluida [{current_fecha_str}] {desc[:60]}")
+            continue
+
+        # Si hay dos montos, el segundo es USD; si hay uno, detectar moneda por descripción
+        if usd_str:
+            moneda = 'USD'
+            monto_final_str = usd_str
+        else:
+            moneda = detectar_moneda(desc)
+            monto_final_str = monto_str
+
+        desc_final = re.sub(r'\s+(USD|BRL|ARS)\s*$', '', desc, flags=re.IGNORECASE).strip()
+
+        clave = (current_fecha_str, desc_final, monto_final_str, moneda)
+        if clave in consumos_vistos:
+            continue
+        consumos_vistos.add(clave)
+
+        monto_float = limpiar_monto(monto_final_str, current_fecha_str, desc_final)
+        if monto_float is not None and abs(monto_float) > 0:
+            categoria = clasificar_consumo(desc_final)
+            logger.info(
+                "Consumo [%s] %s | %s %.2f | %s",
+                current_fecha_str, desc_final[:50], moneda, monto_float, categoria
+            )
+            consumos.append({
+                'fecha': current_fecha_str,
+                'descripcion': desc_final,
+                'monto': abs(monto_float),
+                'moneda': moneda,
+                'tarjeta': nombre_tarjeta,
+                'numero_tarjeta': numero_tarjeta or '',
+                'banco': banco or '',
+                'categoria': categoria
+            })
+
+    logger.info(f"Total consumos extraídos de {nombre_tarjeta} (Santander): {len(consumos)}")
+    return consumos
 
 
 def procesar_archivo_pdf(ruta_completa, nombre_archivo, password_pdf, carpeta_tmp):
@@ -471,11 +593,14 @@ def procesar_archivo_pdf(ruta_completa, nombre_archivo, password_pdf, carpeta_tm
 
         nombre_tarjeta = detectar_tipo_tarjeta(texto_completo)
         numero_tarjeta, banco = extraer_datos_tarjeta(texto_completo)
-        logger.info(f"Tipo de tarjeta: {nombre_tarjeta} | Número: {numero_tarjeta or 'No detectado'} | Banco: {banco or 'No detectado'}")
+        logger.info(f"Tipo: {nombre_tarjeta} | Número: {numero_tarjeta or 'N/D'} | Banco: {banco or 'N/D'}")
 
-        consumos = procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco)
+        emisor = detectar_emisor(texto_completo)
+        if emisor == 'SANTANDER':
+            consumos = procesar_texto_santander(texto_completo, nombre_tarjeta, numero_tarjeta, banco)
+        else:
+            consumos = procesar_texto_resumen(texto_completo, nombre_tarjeta, numero_tarjeta, banco)
 
-        # Agregar nombre de archivo a cada consumo
         for c in consumos:
             c['archivo'] = nombre_archivo
 
